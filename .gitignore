@@ -1,0 +1,10 @@
+.DS_Store
+.idea
+*~
+*.iml
+*.log
+.m2/repository
+target/
+*.jar
+*iws
+.tmp
