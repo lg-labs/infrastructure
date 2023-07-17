@@ -20,7 +20,7 @@ Using `makefile`
 ```shell
 make elk-up
 ```
-> 👋  **[Kibana Web Site][4]**
+> 👋  **[Kibana Web Site, Port:5601][kibana]**
 > 
 > Username: `elastic`  
 > Password: `lgpass`
@@ -34,13 +34,38 @@ Using `makefile`
 make sonar-up
 ```
 
-> 👋  **[SonarQube WebSite][5]** 
+> 👋  **[SonarQube WebSite, Port:9000][sonar]** 
 > 
 > _For these cases using default credentials_  
 > Username: `admin`  
 > Password: `admin`
 
 To stop SonarQuebe `make sonar-down` or completely destroy `make sonar-clean`.
+
+
+## Start with Grafana
+Using `makefile`
+
+```shell
+make grafana-up
+```
+
+> 👋  **[Grafana WebSite, Port:3000][grafana]**
+>
+> Username: `admin`  
+> Password: `lgpass`
+
+To stop Grafana `make grafana-down` or completely destroy `make grafana-clean`.
+
+## All in one
+Using `makefile`
+
+```shell
+make all-up
+```
+
+To stop all `make all-down` or completely destroy `make all-clean`.
+
 
 ## ⚖️ License
 
@@ -51,6 +76,10 @@ The MIT License (MIT). Please see [License][3] for more information.
 [1]: https://lufgarciaqu.medium.com
 [2]: https://img.shields.io/badge/license-MIT-green?style=flat-square
 [3]: LICENSE
-[4]: http://localhost:5601
-[5]: http://localhost:9000
+
+
+
+[kibana]: http://localhost:5601
+[sonar]: http://localhost:9000
+[grafana]: http://localhost:3000
 
