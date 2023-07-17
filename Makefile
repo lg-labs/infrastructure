@@ -19,6 +19,15 @@ docker-sonar-down:
 docker-sonar-up:
 	docker-compose -f ${SONAR}/docker-compose.yml up -d
 
+docker-grafana-down-vol:
+	docker-compose -f ${GRAFANA}/docker-compose.yml down --volumes
+
+docker-grafana-down:
+	docker-compose -f ${GRAFANA}/docker-compose.yml down --volumes
+
+docker-grafana-up:
+	docker-compose -f ${GRAFANA}/docker-compose.yml up -d
+
 
 # ELK
 elk-up: docker-elk-up
@@ -30,10 +39,15 @@ sonar-up: docker-sonar-up
 sonar-down: docker-sonar-down
 sonar-clean: docker-sonar-down-vol
 
+# SONAR
+grafana-up: docker-grafana-up
+grafana-down: docker-grafana-down
+grafana-clean: docker-grafana-down-vol
+
 # ALL
-all-up: elk-up sonar-up
-all-down: elk-down sonar-down
-all-clean: elk-clean sonar-clean
+all-up: elk-up sonar-up grafana-up
+all-down: elk-down sonar-down grafana-down
+all-clean: elk-clean sonar-clean grafana-clean
 
 
 
@@ -41,3 +55,4 @@ all-clean: elk-clean sonar-clean
 # Constants
 ELK = elk
 SONAR = sonar-qube
+GRAFANA = grafana-loki
