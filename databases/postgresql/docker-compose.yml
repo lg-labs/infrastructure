@@ -1,0 +1,17 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: lg-infra-postgres
+    expose:
+      - ${POSTGRES_PORT}
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASS}
+    ports:
+      - '${POSTGRES_PORT}:5432'
+    volumes:
+      - db:/var/lib/postgresql/data
+volumes:
+  db:
+    driver: local
