@@ -1,37 +1,52 @@
-version: "3"
-
 services:
   sonarqube:
     image: sonarqube:${SONAR_VERSION}
     container_name: sonar_qube
+    hostname: sonarqube
     expose:
       - ${SONAR_PORT}
     ports:
       - "127.0.0.1:${SONAR_PORT}:9000"
     networks:
       - sonarnet
+    depends_on:
+      - db_sonar
     environment:
-      - sonar.jdbc.url=jdbc:postgresql://db:5432/sonar
-      - sonar.jdbc.username=${POSTGRESQL_USER}
-      - sonar.jdbc.password=${POSTGRESQL_PASSWORD}
+      - SONAR_JDBC_URL=jdbc:postgresql://db_sonar:5432/sonar
+      - SONAR_JDBC_USERNAME=${POSTGRES_USER}
+      - SONAR_JDBC_PASSWORD=${POSTGRES_PASS}
+      # The following (commented out) setting is a workaround for the following error:
+      #
+      #     max virtual memory areas vm.max_map_count [65530] is too low, increase to at least [262144]
+      #
+      # It is better to add the following to the file `%USERPROFILE%\.wslconfig` on Windows instead:
+      #
+      #     [wsl2]
+      #     kernelCommandLine="sysctl.vm.max_map_count=262144"
+      #- SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+      # TODO: change default password using the api
+      # curl -u admin:admin -X POST http://localhost:9000/api/users/change_password?login=admin&previousPassword=admin&password=lglabs
     volumes:
       - sonarqube_conf:/opt/sonarqube/conf
       - sonarqube_data:/opt/sonarqube/data
       - sonarqube_extensions:/opt/sonarqube/extensions
       - sonarqube_bundled-plugins:/opt/sonarqube/lib/bundled-plugins
+      - sonarqube_logs:/opt/sonarqube/logs
     deploy:
       resources:
         limits:
           memory: ${SONAR_MEM_LIMIT}
 
-  db:
-    image: postgres:${POSTGRESQL_VERSION}
+  db_sonar:
+    image: postgres:${POSTGRES_VERSION}
     container_name: db_sonar
     networks:
       - sonarnet
+    hostname: postgres
     environment:
-      - POSTGRES_USER=${POSTGRESQL_USER}
-      - POSTGRES_PASSWORD=${POSTGRESQL_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASS}
+      - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgresql:/var/lib/postgresql
       - postgresql_data:/var/lib/postgresql/data
@@ -47,6 +62,7 @@ volumes:
   sonarqube_conf:
   sonarqube_data:
   sonarqube_extensions:
+  sonarqube_logs:
   sonarqube_bundled-plugins:
   postgresql:
   postgresql_data:
