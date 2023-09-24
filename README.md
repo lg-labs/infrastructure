@@ -41,7 +41,14 @@ make sonar-up
 > Password: `admin`
 
 To stop SonarQuebe `make sonar-down` or completely destroy `make sonar-clean`.
-
+To **stop** SonarQuebe.
+```shell
+make sonar-down
+```
+Or completely **destroy**.
+```shell
+make sonar-clean
+```
 
 ## [Start with Grafana][grafana-doc]
 Using `makefile`

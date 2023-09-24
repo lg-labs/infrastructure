@@ -71,4 +71,4 @@ SONAR = sonar-qube
 GRAFANA = grafana-loki
 PROMETHUEUS= prometheus
 DB = databases
-POSTGRES = ${DB}/postgresql
+POSTGRES = ${DB}/postgres

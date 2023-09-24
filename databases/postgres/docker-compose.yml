@@ -1,8 +1,7 @@
-version: '3.9'
 services:
-  db:
+  postgressql:
     image: postgres:${POSTGRES_VERSION}
-    container_name: lg-infra-postgres
+    container_name: lg-infra-db-postgres
     expose:
       - ${POSTGRES_PORT}
     environment:
@@ -12,6 +11,11 @@ services:
       - '${POSTGRES_PORT}:5432'
     volumes:
       - db:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: ${POSTGRES_MEM_LIMIT}
 volumes:
   db:
     driver: local
