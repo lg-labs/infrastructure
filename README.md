@@ -16,7 +16,7 @@ For more information, check [Personal Blog][1].
 Using `makefile`
 
 ## [Start with ELK][elk-doc]
-
+Using `makefile` to 😀 ELK **start**.
 ```shell
 make elk-up
 ```
@@ -27,8 +27,17 @@ make elk-up
 
 To stop ELK `make elk-down` or completely destroy `make elk-clean`.
 
+😴 ELK **stop**:
+```shell
+make elk-down
+```
+⛔ ELK **destroy**:
+```shell
+make elk-clean
+```
+
 ## [Start with SonarQube][sonar-doc]
-Using `makefile`
+Using `makefile` to 😀 SonarQube **start**.
 
 ```shell
 make sonar-up
@@ -37,21 +46,22 @@ make sonar-up
 > 👋  **[SonarQube WebSite, Port:9000][sonar]** 
 > 
 > _For these cases using default credentials_  
-> Username: `admin`  
-> Password: `admin`
+> Username: `lglabs`  
+> Password: `lgpass`
 
-To stop SonarQuebe `make sonar-down` or completely destroy `make sonar-clean`.
-To **stop** SonarQuebe.
+To stop SonarQube `make sonar-down` or completely destroy `make sonar-clean`.
+
+😴 SonarQube **stop**:
 ```shell
 make sonar-down
 ```
-Or completely **destroy**.
+⛔️ SonarQube **destroy**:
 ```shell
 make sonar-clean
 ```
 
 ## [Start with Grafana][grafana-doc]
-Using `makefile`
+Using `makefile` to 😀 Grafana **start**.
 
 ```shell
 make grafana-up
@@ -64,8 +74,16 @@ make grafana-up
 
 To stop Grafana `make grafana-down` or completely destroy `make grafana-clean`.
 
+😴 Grafana **stop**:           
+```shell
+make grafana-down
+```
+⛔️ Grafana **destroy**:
+```shell
+make grafana-clean
+```
 ## [Start with Postgres][db-doc]
-Using `makefile` to **start** Postgres.
+Using `makefile` to 😀 Postgres **start**.
 
 ```shell
 make postgres-up
@@ -78,11 +96,11 @@ make postgres-up
 > Username: `lglabs`  
 > Password: `lgpass`
 
-To **stop** Postgres.
+😴 Postgres **stop**:
 ```shell
 make postgres-down
 ```
-Or completely **destroy**.
+⛔️ Postgres **destroy**:
 ```shell
 make postgres-clean
 ```
@@ -99,7 +117,7 @@ To **stop** all.
 ```shell
 make all-down
 ```
-Or completely **destroy**.
+⛔️ Or completely **destroy**.
 ```shell
 make all-clean
 ```

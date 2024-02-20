@@ -1,12 +1,12 @@
 services:
   sonarqube:
     image: sonarqube:${SONAR_VERSION}
-    container_name: sonar_qube
+    container_name: sonarqube
     hostname: sonarqube
     expose:
       - ${SONAR_PORT}
     ports:
-      - "127.0.0.1:${SONAR_PORT}:9000"
+      - "${SONAR_PORT}:${SONAR_PORT}"
     networks:
       - sonarnet
     depends_on:
@@ -23,9 +23,7 @@ services:
       #
       #     [wsl2]
       #     kernelCommandLine="sysctl.vm.max_map_count=262144"
-      #- SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
-      # TODO: change default password using the api
-      # curl -u admin:admin -X POST http://localhost:9000/api/users/change_password?login=admin&previousPassword=admin&password=lglabs
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
     volumes:
       - sonarqube_conf:/opt/sonarqube/conf
       - sonarqube_data:/opt/sonarqube/data
@@ -36,6 +34,15 @@ services:
       resources:
         limits:
           memory: ${SONAR_MEM_LIMIT}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl sonarqube:${SONAR_PORT} | grep -q 'SonarQube'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
 
   db_sonar:
     image: postgres:${POSTGRES_VERSION}
@@ -54,6 +61,27 @@ services:
       resources:
         limits:
           memory: ${SONAR_DB_MEM_LIMIT}
+
+  sonar_api:
+    image: alpine
+    container_name: sonar_api
+    depends_on:
+      sonarqube:
+        condition: service_healthy
+    networks:
+      - sonarnet
+    entrypoint: [ '/bin/sh', '-c' ]
+    command: |
+      "
+      # install curl
+      apk add --no-cache curl
+      # Change login using Sonarqube API
+      curl -u admin:admin -X POST 'sonarqube:${SONAR_PORT}/api/users/update_login?login=admin&newLogin=${SONAR_USER}' -v
+      # Change password using Sonarqube API
+      curl -u ${SONAR_USER}:admin -X POST 'sonarqube:${SONAR_PORT}/api/users/change_password?login=${SONAR_USER}&previousPassword=admin&password=${SONAR_PASS}' -v
+      # Create a sonar project 
+      curl -u ${SONAR_USER}:${SONAR_PASS} -X POST 'sonarqube:${SONAR_PORT}/api/projects/create?name=LgApp&project=lgapp'
+      "
 
 networks:
   sonarnet:
