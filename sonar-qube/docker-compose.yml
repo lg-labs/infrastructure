@@ -38,11 +38,12 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl sonarqube:${SONAR_PORT} | grep -q 'SonarQube'",
+          "curl sonarqube:${SONAR_PORT}/api/system/status | grep -q -e '\"status\":\"UP\"'  -e '\"status\":\"DB_MIGRATION_NEEDED\"' -e '\"status\":\"DB_MIGRATION_RUNNING\"'",
         ]
-      interval: 10s
-      timeout: 10s
-      retries: 120
+      interval: 25s
+      timeout: 1s
+      retries: 3
+      start_period: 55s
 
   db_sonar:
     image: postgres:${POSTGRES_VERSION}
