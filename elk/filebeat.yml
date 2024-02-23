@@ -1,25 +1,15 @@
 filebeat.inputs:
-  - type: filestream
+  - type: log
     id: default-filestream
     paths:
       - ingest_data/*.log
+    enabled: true
+    json.keys_under_root: true
 
-filebeat.autodiscover:
-  providers:
-    - type: docker
-      hints.enabled: true
+    processors:
+      - decode_json_fields:
+          fields: [ 'message' ]
+          target: json
 
-processors:
-  - add_docker_metadata: ~
-
-setup.kibana:
-  host: ${KIBANA_HOSTS}
-  username: ${ELASTIC_USER}
-  password: ${ELASTIC_PASSWORD}
-
-output.elasticsearch:
-  hosts: ${ELASTIC_HOSTS}
-  username: ${ELASTIC_USER}
-  password: ${ELASTIC_PASSWORD}
-  ssl.enabled: true
-  ssl.certificate_authorities: "certs/ca/ca.crt"
+output.logstash:
+  hosts: [ "${HOSTS}" ]
