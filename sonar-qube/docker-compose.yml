@@ -80,8 +80,10 @@ services:
       curl -u admin:admin -X POST 'sonarqube:${SONAR_PORT}/api/users/update_login?login=admin&newLogin=${SONAR_USER}' -v
       # Change password using Sonarqube API
       curl -u ${SONAR_USER}:admin -X POST 'sonarqube:${SONAR_PORT}/api/users/change_password?login=${SONAR_USER}&previousPassword=admin&password=${SONAR_PASS}' -v
-      # Create a sonar project 
+      # Create a sonar project backend
       curl -u ${SONAR_USER}:${SONAR_PASS} -X POST 'sonarqube:${SONAR_PORT}/api/projects/create?name=LgApp&project=lgapp'
+       # Create a sonar project frontend
+      curl -u ${SONAR_USER}:${SONAR_PASS} -X POST 'sonarqube:${SONAR_PORT}/api/projects/create?name=LgWeb&project=lgweb'
       "
 
 networks:
