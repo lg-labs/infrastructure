@@ -6,6 +6,11 @@
 
 ## Start with postgresql
 
+> 👋  **[Postgres UI][3]**
+>
+> Username: `lg@labx.com`  
+> Password: `lgpass`
+
 > 👋  **[PostgreSQL Connection][2]**
 >
 > _For these cases using default credentials_  
@@ -22,6 +27,7 @@
 
 [1]: https://www.postgresql.org/files/documentation/pdf/16/postgresql-16-US.pdf
 [2]: jdbc:postgresql://localhost:5432/postgres
+[3]: http://localhost:5012
 
 
 [img_1]: https://contentstatic.techgig.com/photo/77786852/top-7-most-used-databases-by-developers-in-2020.jpg?w=2912&h=1658&auto=format&fit=crop

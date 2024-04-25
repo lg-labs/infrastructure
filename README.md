@@ -88,7 +88,11 @@ Using `makefile` to 😀 Postgres **start**.
 ```shell
 make postgres-up
 ```
-
+> 👋  **[Postgres UI][3]**
+>
+> Username: `lg@labx.com`  
+> Password: `lgpass`
+> 
 > 👋  **[PostgreSQL Connection, Port:5432][postgres]**
 >
 > _For these cases using default credentials_  
