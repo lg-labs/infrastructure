@@ -5,7 +5,7 @@
       "Group": "Servers",
       "Host": "postgres",
       "Port": 5432,
-      "MaintenanceDB": "",
+      "MaintenanceDB": "postgres",
       "Username": "lglabs",
       "Password": "lgpass",
       "SSLMode": "prefer",
