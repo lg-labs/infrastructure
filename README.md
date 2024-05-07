@@ -109,6 +109,28 @@ make postgres-down
 make postgres-clean
 ```
 
+## [Start with Splunk][splunk-doc]
+Using `makefile` to 😀 Splunk **start**.
+
+```shell
+make splunk-up
+```
+
+> 👋  **[Splunk WebSite, Port:9003][splunk]**
+>
+> _For these cases using default credentials_  
+> Username: `admin`  
+> Password: `lgpass2024*`
+> 
+
+😴 Splunk **stop**:
+```shell
+make splunk-down
+```
+⛔️ Splunk **destroy**:
+```shell
+make splunk-clean
+```
 
 # All in one
 Using `makefile` to **start** All.
@@ -142,9 +164,11 @@ The MIT License (MIT). Please see [License][3] for more information.
 [sonar]: http://localhost:9000
 [grafana]: http://localhost:3000
 [postgres]: jdbc:postgresql://localhost:5432/postgres
+[splunk]: http://localhost:9003 "http://localhost:9003"
 
 
 [elk-doc]: elk/README.md
 [db-doc]: databases/README.md
 [sonar-doc]: sonar-qube/README.md
 [grafana-doc]: grafana-loki/README.md
+[splunk-doc]: splunk/README.md

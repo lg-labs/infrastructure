@@ -1,0 +1,14 @@
+services:
+  splunk:
+    image: ${SPLUNK_IMAGE:-splunk/splunk:${SPLUNK_VERSION}}
+    container_name: splunk
+    expose:
+      - ${SPLUNK_PORT}
+    ports:
+      - ${SPLUNK_PORT}:8000
+    environment:
+      - SPLUNK_START_ARGS=--accept-license
+      - SPLUNK_ROOT_ENDPOINT=/splunkweb
+      - SPLUNK_PASSWORD=${SPLUNK_PASS}
+
+    platform: linux/amd64

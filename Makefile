@@ -37,6 +37,15 @@ docker-postgres-down:
 docker-postgres-up:
 	docker-compose -f ${POSTGRES}/docker-compose.yml up -d
 
+docker-splunk-down-vol:
+	docker-compose -f ${SPLUNK}/docker-compose.yml down --volumes
+
+docker-splunk-down:
+	docker-compose -f ${SPLUNK}/docker-compose.yml down
+
+docker-splunk-up:
+	docker-compose -f ${SPLUNK}/docker-compose.yml up -d
+
 # ELK
 elk-up: docker-elk-up
 elk-down: docker-elk-down
@@ -57,6 +66,16 @@ postgres-up: docker-postgres-up
 postgres-down: docker-postgres-down
 postgres-clean: docker-postgres-down-vol
 
+# DB - POSTGRES
+postgres-up: docker-postgres-up
+postgres-down: docker-postgres-down
+postgres-clean: docker-postgres-down-vol
+
+# Splunk
+splunk-up: docker-splunk-up
+splunk-down: docker-splunk-down
+splunk-clean: docker-splunk-down-vol
+
 # ALL
 all-up: elk-up sonar-up grafana-up postgres-up
 all-down: elk-down sonar-down grafana-down postgres-down
@@ -72,3 +91,4 @@ GRAFANA = grafana-loki
 PROMETHUEUS= prometheus
 DB = databases
 POSTGRES = ${DB}/postgres
+SPLUNK = splunk
