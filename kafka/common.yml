@@ -1,0 +1,3 @@
+networks:
+  lg-kafka:
+    driver: bridge

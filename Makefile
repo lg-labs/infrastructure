@@ -46,6 +46,31 @@ docker-splunk-down:
 docker-splunk-up:
 	docker-compose -f ${SPLUNK}/docker-compose.yml up -d
 
+zookeeper-down:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/zookeeper.yml down
+kafka-cluster-down:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_cluster.yml down
+kafka-init-down:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/init_kafka.yml down
+kafka-mngr-down:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_mngr.yml down
+zookeeper-down-vol:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/zookeeper.yml down --volumes
+kafka-cluster-down-vol:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_cluster.yml down --volumes
+kafka-init-down-vol:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/init_kafka.yml down --volumes
+kafka-mngr-down-vol:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_mngr.yml down --volumes
+zookeeper-up:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/zookeeper.yml up -d
+kafka-cluster-up:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_cluster.yml up -d
+kafka-init-up:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/init_kafka.yml up -d
+kafka-mngr-up:
+	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_mngr.yml up -d
+
 # ELK
 elk-up: docker-elk-up
 elk-down: docker-elk-down
@@ -76,12 +101,15 @@ splunk-up: docker-splunk-up
 splunk-down: docker-splunk-down
 splunk-clean: docker-splunk-down-vol
 
+# Kafka
+kafka-up: zookeeper-up kafka-cluster-up kafka-init-up kafka-mngr-up
+kafka-down:  zookeeper-down kafka-cluster-down kafka-init-down kafka-mngr-down
+kafka-clean: zookeeper-down-vol kafka-cluster-down-vol kafka-init-down-vol kafka-mngr-down-vol
+
 # ALL
-all-up: elk-up sonar-up grafana-up postgres-up
-all-down: elk-down sonar-down grafana-down postgres-down
-all-clean: elk-clean sonar-clean grafana-clean postgres-clean
-
-
+all-up: elk-up sonar-up grafana-up postgres-up kafka-up
+all-down: elk-down sonar-down grafana-down postgres-down kafka-down
+all-clean: elk-clean sonar-clean grafana-clean postgres-clean kafka-clean
 
 
 # Constants
@@ -92,3 +120,4 @@ PROMETHUEUS= prometheus
 DB = databases
 POSTGRES = ${DB}/postgres
 SPLUNK = splunk
+KAFKA = kafka

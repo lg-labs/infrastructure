@@ -132,6 +132,25 @@ make splunk-down
 make splunk-clean
 ```
 
+## [Start with Kafka][kafka-doc]
+Using `makefile` to 😀 Kafka **start**.
+
+```shell
+make kafka-up
+```
+
+> 👋  **[Kafka UI 1 WebSite, Port:9080][kafka]**
+>
+
+😴 Kafka **stop**:
+```shell
+make kafka-down
+```
+⛔️ Kafka **destroy**:
+```shell
+make kafka-clean
+```
+
 # All in one
 Using `makefile` to **start** All.
 
@@ -165,6 +184,7 @@ The MIT License (MIT). Please see [License][3] for more information.
 [grafana]: http://localhost:3000
 [postgres]: jdbc:postgresql://localhost:5432/postgres
 [splunk]: http://localhost:9003 "http://localhost:9003"
+[kafka]: http://localhost:9080 "http://localhost:9080"
 
 
 [elk-doc]: elk/README.md
@@ -172,3 +192,4 @@ The MIT License (MIT). Please see [License][3] for more information.
 [sonar-doc]: sonar-qube/README.md
 [grafana-doc]: grafana-loki/README.md
 [splunk-doc]: splunk/README.md
+[kafka-doc]: kafka/README.md
