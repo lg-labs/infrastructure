@@ -6,6 +6,7 @@ services:
       - ${SPLUNK_PORT}
     ports:
       - ${SPLUNK_PORT}:8000
+      - "9005:8089"
     environment:
       - SPLUNK_START_ARGS=--accept-license
       - SPLUNK_ROOT_ENDPOINT=/splunkweb
