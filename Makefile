@@ -111,7 +111,6 @@ all-up: elk-up sonar-up grafana-up postgres-up kafka-up
 all-down: elk-down sonar-down grafana-down postgres-down kafka-down
 all-clean: elk-clean sonar-clean grafana-clean postgres-clean kafka-clean
 
-
 # Constants
 ELK = elk
 SONAR = sonar-qube
