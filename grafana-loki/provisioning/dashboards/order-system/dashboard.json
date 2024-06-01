@@ -1,0 +1,32 @@
+{
+   "description": "Dashboard for data from Order System",
+   "panels": [
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "decbytes"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 24
+         },
+         "id": 1,
+         "pluginVersion": "v10.0.0",
+         "targets": [ ],
+         "title": "Total memory (GB)",
+         "type": "timeseries"
+      }
+   ],
+   "schemaVersion": 36,
+   "time": {
+      "from": "now-6h",
+      "to": "now"
+   },
+   "timezone": "utc",
+   "title": "DB Order"
+}

@@ -69,7 +69,7 @@ make grafana-up
 
 > 👋  **[Grafana WebSite, Port:3000][grafana]**
 >
-> Username: `admin`  
+> Username: `lglabs`  
 > Password: `lgpass`
 
 To stop Grafana `make grafana-down` or completely destroy `make grafana-clean`.
