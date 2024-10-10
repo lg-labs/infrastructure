@@ -88,11 +88,30 @@ Using `makefile` to 😀 Postgres **start**.
 ```shell
 make postgres-up
 ```
-> 👋  **[Postgres UI][3]**
+> 👋  **[Postgres UI][postgres-ui]**
 >
 > Username: `lg@labx.com`  
 > Password: `lgpass`
 > 
+Create a server connection at PgAdmin
+```json
+{
+  "Servers": {
+    "1": {
+      "Name": "My PostgreSQL Server",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "lglabs",
+      "Password": "lgpass",
+      "SSLMode": "prefer",
+      "UseSSHTunnel": 0
+    }
+  }
+}
+```
+
 > 👋  **[PostgreSQL Connection, Port:5432][postgres]**
 >
 > _For these cases using default credentials_  
@@ -185,6 +204,7 @@ The MIT License (MIT). Please see [License][3] for more information.
 [postgres]: jdbc:postgresql://localhost:5432/postgres
 [splunk]: http://localhost:9003 "http://localhost:9003"
 [kafka]: http://localhost:9080 "http://localhost:9080"
+[postgres-ui]: http://localhost:5012 "http://localhost:5012"
 
 
 [elk-doc]: elk/README.md

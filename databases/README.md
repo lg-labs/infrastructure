@@ -11,6 +11,24 @@
 > Username: `lg@labx.com`  
 > Password: `lgpass`
 
+Create a server connection at PgAdmin 
+```json
+{
+  "Servers": {
+    "1": {
+      "Name": "My PostgreSQL Server",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "lglabs",
+      "Password": "lgpass",
+      "SSLMode": "prefer",
+      "UseSSHTunnel": 0
+    }
+  }
+}
+```
 > 👋  **[PostgreSQL Connection][2]**
 >
 > _For these cases using default credentials_  
