@@ -1,4 +1,13 @@
-docker-elk-down-vol:
+# Docker Commands
+docker-kill:
+	@echo "🛑 Killing all Docker containers..."
+	@docker ps -aq | xargs -r docker rm -f
+
+docker-prune:
+	@echo "🛑 Cleaning Docker..."
+	@docker system prune --volumes --force
+
+docker-elk-down-vol: docker-kill
 	docker-compose -f ${ELK}/docker-compose.yml down --volumes
 
 docker-elk-down:
@@ -10,7 +19,7 @@ docker-elk-up:
 elk-crt:
 	curl -O https://download.elastic.co/demos/kibana/gettingstarted/7.x/logs.jsonl.gz && docker cp es01:/usr/share/elasticsearch/config/certs/ca/ca.crt ./.tmp/.                                                                                                                                       0:48:39
 
-docker-sonar-down-vol:
+docker-sonar-down-vol: docker-kill
 	docker-compose -f ${SONAR}/docker-compose.yml down --volumes
 
 docker-sonar-down:
@@ -19,7 +28,7 @@ docker-sonar-down:
 docker-sonar-up:
 	docker-compose -f ${SONAR}/docker-compose.yml up -d
 
-docker-grafana-down-vol:
+docker-grafana-down-vol: docker-kill
 	docker-compose -f ${GRAFANA}/docker-compose.yml down --volumes
 
 docker-grafana-down:
@@ -28,7 +37,7 @@ docker-grafana-down:
 docker-grafana-up:
 	docker-compose -f ${GRAFANA}/docker-compose.yml up -d
 
-docker-postgres-down-vol:
+docker-postgres-down-vol: docker-kill
 	docker-compose -f ${POSTGRES}/docker-compose.yml down --volumes
 
 docker-postgres-down:
@@ -37,7 +46,7 @@ docker-postgres-down:
 docker-postgres-up:
 	docker-compose -f ${POSTGRES}/docker-compose.yml up -d
 
-docker-splunk-down-vol:
+docker-splunk-down-vol: docker-kill
 	docker-compose -f ${SPLUNK}/docker-compose.yml down --volumes
 
 docker-splunk-down:
@@ -54,13 +63,13 @@ kafka-init-down:
 	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/init_kafka.yml down
 kafka-mngr-down:
 	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_mngr.yml down
-zookeeper-down-vol:
+zookeeper-down-vol: docker-kill
 	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/zookeeper.yml down --volumes
-kafka-cluster-down-vol:
+kafka-cluster-down-vol: docker-kill
 	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_cluster.yml down --volumes
-kafka-init-down-vol:
+kafka-init-down-vol: docker-kill
 	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/init_kafka.yml down --volumes
-kafka-mngr-down-vol:
+kafka-mngr-down-vol: docker-kill
 	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_mngr.yml down --volumes
 zookeeper-up:
 	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/zookeeper.yml up -d
