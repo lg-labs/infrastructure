@@ -10,7 +10,8 @@ services:
     networks:
       - sonarnet
     depends_on:
-      - db_sonar
+      db_sonar:
+        condition: service_healthy
     environment:
       - SONAR_JDBC_URL=jdbc:postgresql://db_sonar:5432/sonar
       - SONAR_JDBC_USERNAME=${POSTGRES_USER}
@@ -30,10 +31,6 @@ services:
       - sonarqube_extensions:/opt/sonarqube/extensions
       - sonarqube_bundled-plugins:/opt/sonarqube/lib/bundled-plugins
       - sonarqube_logs:/opt/sonarqube/logs
-    deploy:
-      resources:
-        limits:
-          memory: ${SONAR_MEM_LIMIT}
     healthcheck:
       test:
         [
@@ -62,6 +59,11 @@ services:
       resources:
         limits:
           memory: ${SONAR_DB_MEM_LIMIT}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   sonar_api:
     image: alpine

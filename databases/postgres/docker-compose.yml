@@ -16,6 +16,12 @@ services:
       resources:
         limits:
           memory: ${POSTGRES_MEM_LIMIT}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $POSTGRES_USER" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   pgadmin:
     image: dpage/pgadmin4:${PGADMIN_VERSION}
     container_name: lg-infra-db-postgres-ui
@@ -33,6 +39,9 @@ services:
       - ./servers.json:/pgadmin4/servers.json
     links:
       - postgres:pgsql-server
+    depends_on:
+      postgres:
+        condition: service_healthy
 volumes:
   db:
     driver: local
