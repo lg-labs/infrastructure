@@ -169,6 +169,23 @@ You may need to restart your Logstash container after modifying the `logstash.ym
 
 Note, the Logstash output index name is `"logstash-%{+YYYY.MM.dd}"`. To see the data, you will need to create a Data View for the `“logstash-*”` pattern, as seen below.
 
+# Common issues
+### _issue 1:_
+> ...Exiting: error loading config file: config file ("metricbeat.yml") must be owned by the user identifier (uid=0) or root
+**Solution:** Change the permissions of the file `metricbeat.yml` to be read-only for the owner.
+
+```shell
+  sudo chown root:wheel metricbeat.yml
+  sudo chmod 644 metricbeat.yml
+```
+### _ssue 2:_
+> ...Exiting: error loading config file: config file ("filebeat.yml") must be owned by the user identifier (uid=0) or root
+**Solution:** Change the permissions of the file `filebeat.yml` to be read-only for the owner.
+```shell
+  sudo chown root:wheel filebeat.yml
+  sudo chmod 644 filebeat.yml
+```
+
 # References
 1. [Getting started with the Elastic Stack and Docker-Compose][1]
 2. [Official Elastic Docker Hub][2]
