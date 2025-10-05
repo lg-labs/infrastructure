@@ -31,8 +31,6 @@ jobs:
           chmod +x ./elk/filebeat.yml
           chmod +x ./elk/metricbeat.yml
 
-      - name: ✅ Verify setup
+      - name: ✅ Run and Verify installation
         run: |
-          echo "Verifying shell..."
-          docker ps
-          echo "Docker installed successfully on macOS ARM"
+          make sonar-up
