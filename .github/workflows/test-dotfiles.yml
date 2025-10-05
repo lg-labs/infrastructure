@@ -17,6 +17,13 @@ jobs:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Start Docker
+        run: |
+          brew install --cask docker
+          open -a Docker
+          sleep 10
+          docker info
+
       - name: 🔧 Set up Docker
         run: |
           brew install docker-compose
@@ -31,6 +38,6 @@ jobs:
           chmod +x ./elk/filebeat.yml
           chmod +x ./elk/metricbeat.yml
 
-      - name: ✅ Run and Verify installation
+      - name: ✅ Run and Verify SonarQube
         run: |
           make sonar-up
