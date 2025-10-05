@@ -1,0 +1,10 @@
+# Change type: feat | fix | docs | style | refactor | test | chore
+# Format: type(scope): short description
+# Example: feat(auth): add token validation
+
+<type>(<scope>): <short description>
+
+[optional] Additional context or details about the change.
+
+[optional] References:
+Refs: #123

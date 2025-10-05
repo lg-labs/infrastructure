@@ -1,0 +1,42 @@
+name: Test macOS Dotfiles Setup
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 0 1,16 * *'
+  workflow_dispatch:
+
+jobs:
+  test-dotfiles:
+    runs-on: macos-latest  # Use the latest macOS runner
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🔧 Set up Docker
+        run: |
+          brew install docker-compose
+          docker compose version
+
+      - name: Check Docker setup
+        run: |
+          docker version
+          docker compose version
+      - name: 🛠️set up Makefile
+        run: |
+          brew install make
+
+      - name: 💻 Run dotfiles installer
+        run: |
+          chmod +x ./elk/filebeat.yml
+          chmod +x ./elk/metricbeat.yml
+
+      - name: ✅ Verify setup
+        run: |
+          echo "Verifying shell..."
+          docker ps
+          echo "Docker installed successfully on macOS ARM"
