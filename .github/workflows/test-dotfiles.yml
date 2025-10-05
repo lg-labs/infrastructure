@@ -1,4 +1,4 @@
-name: Test macOS Dotfiles Setup
+name: Test Infrastructure Setup
 
 on:
   push:
@@ -22,10 +22,6 @@ jobs:
           brew install docker-compose
           docker-compose --version
 
-      - name: Check Docker setup
-        run: |
-          docker version
-          docker compose version
       - name: 🛠️set up Makefile
         run: |
           brew install make
