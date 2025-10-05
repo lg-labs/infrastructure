@@ -37,6 +37,8 @@ jobs:
         run: |
           chmod +x ./elk/filebeat.yml
           chmod +x ./elk/metricbeat.yml
+          open -a Docker
+          sleep 10
           docker info
 
       - name: ✅ Run and Verify SonarQube
