@@ -24,7 +24,7 @@ jobs:
         run: |
           brew install --cask docker
 
-      - name: 🔧 Set up Docker
+      - name: 🔧 Set up Docker Compose
         run: |
           brew install docker-compose
           docker-compose --version
@@ -37,6 +37,7 @@ jobs:
         run: |
           chmod +x ./elk/filebeat.yml
           chmod +x ./elk/metricbeat.yml
+          docker info
 
       - name: ✅ Run and Verify SonarQube
         run: |
