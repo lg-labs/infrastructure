@@ -17,6 +17,12 @@ jobs:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
+      - name: ✅ Verify setup
+        run: |
+          echo "Verifying shell..."
+          docker ps
+          echo "Docker installed successfully on macOS ARM"
+
       - name: 🔧 Set up Docker
         run: |
           brew install docker-compose
