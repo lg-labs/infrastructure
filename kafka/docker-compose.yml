@@ -1,29 +1,173 @@
-version: '3.9'
 services:
-  cmak:
-    image: ghcr.io/eshepelyuk/dckr/cmak-3.0.0.5:latest
-    container_name: lg-kafka-cmak
-    restart: always
+  kafka1:
+    image: confluentinc/cp-kafka:${KAFKA_VERSION}
+    container_name: kafka1
     ports:
-      - "9090:9000"
+      - ${KAFKA_1_PORT}:9092
     environment:
-      ZK_HOSTS: "zookeeper:2181"
-    networks:
-      - ${GLOBAL_NETWORK:-kafka}
+      KAFKA_NODE_ID: 1
+      KAFKA_KRAFT_MODE: 'true'
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093,2@kafka2:29093,3@kafka3:29093"
+      KAFKA_LISTENERS: PLAINTEXT://kafka1:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://kafka1:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      CLUSTER_ID: 'LEWdpqxjSRKfYAiJkcbDjw'
+    volumes:
+      - kafka1-data:/var/lib/kafka/data
+    healthcheck:
+      test: [ "CMD-SHELL", "kafka-broker-api-versions --bootstrap-server kafka1:29092 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
-  kafka-ui:
-    image: provectuslabs/kafka-ui:${KAFKA_UI_VERSION}
-    container_name: lg-kafka-ui
+  kafka2:
+    image: confluentinc/cp-kafka:${KAFKA_VERSION}
+    container_name: kafka2
     ports:
-      - "${KAFKA_UI_PORT}:8080"
-    restart: always
+      - ${KAFKA_2_PORT}:9092
     environment:
-      - DYNAMIC_CONFIG_ENABLED='true'
-      - KAFKA_CLUSTERS_0_NAME=local
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka-broker-1:9092,kafka-broker-2:9092,kafka-broker-3:9092
-      - KAFKA_CLUSTERS_0_METRICS_PORT= 9997
-      - KAFKA_CLUSTERS_0_SCHEMAREGISTRY=http://schema-registry:8081
-      - KAFKA_CLUSTERS_0_AUDIT_TOPICAUDITENABLED='true'
-      - KAFKA_CLUSTERS_0_AUDIT_CONSOLEAUDITENABLED='true'
-    networks:
-      - ${GLOBAL_NETWORK:-kafka}
+      KAFKA_NODE_ID: 2
+      KAFKA_KRAFT_MODE: 'true'
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093,2@kafka2:29093,3@kafka3:29093"
+      KAFKA_LISTENERS: PLAINTEXT://kafka2:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://kafka2:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:29092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      CLUSTER_ID: 'LEWdpqxjSRKfYAiJkcbDjw'
+    volumes:
+      - kafka2-data:/var/lib/kafka/data
+    healthcheck:
+      test: [ "CMD-SHELL", "kafka-broker-api-versions --bootstrap-server kafka2:29092 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  kafka3:
+    image: confluentinc/cp-kafka:${KAFKA_VERSION}
+    container_name: kafka3
+    ports:
+      - ${KAFKA_3_PORT}:9092
+    environment:
+      KAFKA_NODE_ID: 3
+      KAFKA_KRAFT_MODE: 'true'
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093,2@kafka2:29093,3@kafka3:29093"
+      KAFKA_LISTENERS: PLAINTEXT://kafka3:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://kafka3:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:29092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      CLUSTER_ID: 'LEWdpqxjSRKfYAiJkcbDjw'
+    volumes:
+      - kafka3-data:/var/lib/kafka/data
+    healthcheck:
+      test: [ "CMD-SHELL", "kafka-broker-api-versions --bootstrap-server kafka3:29092 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:${KAFKA_VERSION}
+    container_name: schema-registry
+    depends_on:
+      kafka1:
+        condition: service_healthy
+      kafka2:
+        condition: service_healthy
+      kafka3:
+        condition: service_healthy
+    ports:
+      - ${SCHEMA_PORT}:8081
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka1:29092,PLAINTEXT://kafka2:29092,PLAINTEXT://kafka3:29092
+      SCHEMA_REGISTRY_DEBUG: true
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8081/subjects || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  init-kafka:
+    image: confluentinc/cp-kafka:8.0.1
+    container_name: init-kafka
+    depends_on:
+      kafka1:
+        condition: service_healthy
+      kafka2:
+        condition: service_healthy
+      kafka3:
+        condition: service_healthy
+    entrypoint: [ "/bin/sh", "-c" ]
+    command: |
+      "
+      echo 'Waiting for Kafka cluster to be ready...'
+      # probamos conectividad con cualquiera de los brokers
+      for i in {1..10}; do
+        kafka-topics --bootstrap-server kafka1:29092 --list && break
+        echo 'Kafka not ready yet, retrying...'
+        sleep 5
+      done
+      
+      echo 'Creating topics...'
+      # crea topics de manera idempotente
+      kafka-topics --bootstrap-server kafka1:29092 --create --topic blank.1.0.event.created --partitions 3 --replication-factor 3 --if-not-exists
+      kafka-topics --bootstrap-server kafka1:29092 --create --topic blank.1.0.event.updated --partitions 3 --replication-factor 3 --if-not-exists
+      
+      echo 'Successfully created topics:'
+      kafka-topics --bootstrap-server kafka1:29092 --list
+      "
+
+  akhq:
+    image: tchiotludo/akhq:${KAFKA_UI_VERSION}
+    container_name: akhq
+    expose:
+      - ${KAFKA_UI_PORT}
+    ports:
+      - '${KAFKA_UI_PORT}:8080'
+      - "28081:28081"
+    depends_on:
+      schema-registry:
+        condition: service_healthy
+    environment:
+      AKHQ_CONFIGURATION: |
+        akhq:
+          connections:
+            docker-kafka-server:
+              properties:
+                bootstrap.servers: "kafka1:29092,kafka2:29092,kafka3:29092"
+              schema-registry:
+                url: "http://schema-registry:8081"
+
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:28081/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  lg-kafka:
+    driver: bridge
+
+volumes:
+  kafka1-data:
+    name: kafka1-data
+  kafka2-data:
+    name: kafka2-data
+  kafka3-data:
+    name: kafka3-data

@@ -55,30 +55,14 @@ docker-splunk-down:
 docker-splunk-up:
 	docker-compose -f ${SPLUNK}/docker-compose.yml up -d
 
-zookeeper-down:
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/zookeeper.yml down
-kafka-cluster-down:
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_cluster.yml down
-kafka-init-down:
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/init_kafka.yml down
-kafka-mngr-down:
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_mngr.yml down
-zookeeper-down-vol: docker-kill
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/zookeeper.yml down --volumes
-kafka-cluster-down-vol: docker-kill
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_cluster.yml down --volumes
-kafka-init-down-vol: docker-kill
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/init_kafka.yml down --volumes
-kafka-mngr-down-vol: docker-kill
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_mngr.yml down --volumes
-zookeeper-up:
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/zookeeper.yml up -d
-kafka-cluster-up:
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_cluster.yml up -d
-kafka-init-up:
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/init_kafka.yml up -d
-kafka-mngr-up:
-	docker-compose -f ${KAFKA}/common.yml -f ${KAFKA}/kafka_mngr.yml up -d
+docker-kafka-down-vol: docker-kill
+	docker-compose -f ${KAFKA}/docker-compose.yml down --volumes
+
+docker-kafka-down:
+	docker-compose -f ${KAFKA}/docker-compose.yml down
+
+docker-kafka-up:
+	docker-compose -f ${KAFKA}/docker-compose.yml up -d
 
 # ELK
 elk-up: docker-elk-up
@@ -111,9 +95,9 @@ splunk-down: docker-splunk-down
 splunk-clean: docker-splunk-down-vol
 
 # Kafka
-kafka-up: zookeeper-up kafka-cluster-up kafka-init-up kafka-mngr-up
-kafka-down:  zookeeper-down kafka-cluster-down kafka-init-down kafka-mngr-down
-kafka-clean: zookeeper-down-vol kafka-cluster-down-vol kafka-init-down-vol kafka-mngr-down-vol
+kafka-up: docker-kafka-up
+kafka-down:  docker-kafka-down
+kafka-clean: docker-kafka-down-vol
 
 # ALL
 all-up: elk-up sonar-up grafana-up postgres-up kafka-up
