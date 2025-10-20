@@ -218,7 +218,7 @@ services:
       co.elastic.logs/module: logstash
     user: root
     volumes:
-      - certs:/usr/share/logstash/certs
+      - certs:/usr/share/logstash/certs:ro
       - logstashdata01:/usr/share/logstash/data
       - "./logstash_ingest_data/:/usr/share/logstash/ingest_data/"
       - "./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro"
@@ -227,6 +227,9 @@ services:
       - ELASTIC_USER=elastic
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - ELASTIC_HOSTS=https://es01:9200
+      - allow_superuser=true
+    command: |
+      bash -c "echo 'allow_superuser: true' >> /usr/share/logstash/config/logstash.yml && /usr/local/bin/docker-entrypoint logstash"
     deploy:
       resources:
         limits:

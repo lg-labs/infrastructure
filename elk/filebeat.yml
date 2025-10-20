@@ -1,9 +1,11 @@
 filebeat.inputs:
-  - type: log
+  - type: filestream
+    enabled: true
     id: default-filestream
     paths:
       - ingest_data/*.log
-    enabled: true
+    take_over:
+      enabled: true
     json.keys_under_root: true
 
     processors:
