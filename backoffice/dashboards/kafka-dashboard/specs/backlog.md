@@ -105,6 +105,16 @@
 
 **Disparador**: PRs frecuentes que rompan unit tests sin tocar smokes (hoy 0).
 
+### B8. Actualizar `smoke-b7.sh` con tokens
+
+**Estado actual**: el smoke histórico de la subfase B7 (audit middleware → SQLite) quedó pre-auth: hace requests anónimas que oauth2-proxy redirige (302) antes de llegar al BFF. La señal real (filas en SQLite con `user=anonymous, status=200`) sigue siendo válida, pero el script no afirma 403 para internal-topic-protected como pretendía.
+
+**Trabajo**:
+- Refactorizar `smoke-b7.sh` para reusar el helper de tokens de `smoke-c.sh` / `smoke-f.sh`.
+- Volver a hacer assertions explícitas (200 con admin, 403 sobre `__consumer_offsets`).
+
+**Disparador**: detectado durante validación local pre-push de Phase H (2026-05-10). No bloquea — `smoke-c.sh` y `smoke-f.sh` ya cubren los casos críticos del middleware con auth.
+
 ---
 
 ## C. Trazabilidad inversa
