@@ -16,8 +16,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.errors import (
+    IncompatibleSchema,
     InvalidPartitions as DInvalidPartitions,
+    InvalidSchema,
     KafkaUnavailable,
+    SchemaVersionNotFound,
+    SubjectNotFound,
     TopicAlreadyExists,
     TopicNotFound,
 )
@@ -107,6 +111,103 @@ class FakeKafkaRepo:
 
 
 # ---------------------------------------------------------------------------
+# In-memory fake Schema Registry repo
+# ---------------------------------------------------------------------------
+
+class FakeRegistryRepo:
+    """Minimal in-memory Schema Registry replacement for contract tests.
+
+    Models the small subset of the SR API the BFF uses, plus a knob to flip
+    "incompatible" registrations to test the §A5 verbatim re-emission.
+    """
+
+    GLOBAL_DEFAULT = "BACKWARD"
+
+    def __init__(self) -> None:
+        # subject -> list of {id, version, schema, schemaType}
+        self._versions: dict[str, list[dict]] = {}
+        self._compat: dict[str, str] = {}
+        self._next_id = 1
+        self.alive_flag = True
+        # Toggle: when True, the next register_schema raises IncompatibleSchema.
+        self.force_incompatible = False
+        # Toggle: when True, the next register_schema raises InvalidSchema.
+        self.force_invalid_schema = False
+
+        # Seed one subject so list_subjects has data
+        self.register_schema(
+            "lglabs.smoke.events-value",
+            schema_def='{"type":"record","name":"Smoke","fields":[{"name":"id","type":"string"}]}',
+            schema_type="AVRO",
+        )
+
+    # ---- helpers ----------------------------------------------------------
+
+    def alive(self) -> bool:
+        return self.alive_flag
+
+    def list_subjects(self) -> list[str]:
+        return sorted(self._versions.keys())
+
+    def get_compatibility(self, subject: str) -> str:
+        return self._compat.get(subject, self.GLOBAL_DEFAULT)
+
+    def list_versions(self, subject: str) -> list[int]:
+        if subject not in self._versions:
+            raise SubjectNotFound(subject)
+        return [v["version"] for v in self._versions[subject]]
+
+    def get_version(self, subject: str, version) -> dict:
+        if subject not in self._versions:
+            raise SubjectNotFound(subject)
+        if version == "latest":
+            return dict(self._versions[subject][-1])
+        try:
+            v_int = int(version)
+        except (TypeError, ValueError):
+            raise InvalidSchema(subject, "version is not a valid integer", 42202)
+        for v in self._versions[subject]:
+            if v["version"] == v_int:
+                return dict(v)
+        raise SchemaVersionNotFound(subject, v_int)
+
+    def get_latest(self, subject: str) -> dict:
+        return self.get_version(subject, "latest")
+
+    def get_all_versions_full(self, subject: str) -> list[dict]:
+        return [self.get_version(subject, v) for v in self.list_versions(subject)]
+
+    def register_schema(self, subject: str, schema_def: str,
+                        schema_type: str = "AVRO",
+                        references: list[dict] | None = None) -> dict:
+        if self.force_invalid_schema:
+            self.force_invalid_schema = False
+            raise InvalidSchema(subject, "fake invalid schema body", 42201)
+        if self.force_incompatible:
+            self.force_incompatible = False
+            raise IncompatibleSchema(subject, "fake incompatible schema", None)
+
+        existing = self._versions.setdefault(subject, [])
+        next_version = (existing[-1]["version"] + 1) if existing else 1
+        record = {
+            "id": self._next_id,
+            "version": next_version,
+            "schema": schema_def,
+            "schemaType": schema_type,
+        }
+        existing.append(record)
+        self._next_id += 1
+        return {"id": record["id"], "version": record["version"]}
+
+    def set_compatibility(self, subject: str, level: str) -> str:
+        self._compat[subject] = level
+        return level
+
+    def reset(self) -> None:  # parity with real repo's interface
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Pytest fixtures
 # ---------------------------------------------------------------------------
 
@@ -116,8 +217,13 @@ def fake_kafka() -> FakeKafkaRepo:
 
 
 @pytest.fixture
-def app_client(tmp_path, monkeypatch, fake_kafka):
-    """Build the FastAPI app with a tmp SQLite + fake Kafka repo."""
+def fake_registry() -> FakeRegistryRepo:
+    return FakeRegistryRepo()
+
+
+@pytest.fixture
+def app_client(tmp_path, monkeypatch, fake_kafka, fake_registry):
+    """Build the FastAPI app with a tmp SQLite + fake Kafka + fake Schema Registry."""
     sqlite_path = tmp_path / "test.sqlite"
     owners_path = Path(__file__).parent / "fixtures" / "owners.yaml"
     monkeypatch.setenv("SQLITE_PATH", str(sqlite_path))
@@ -143,6 +249,10 @@ def app_client(tmp_path, monkeypatch, fake_kafka):
     # Inject the fake kafka repo (used via get_kafka_repo singleton)
     import app.repos.kafka_repo as kr
     kr._kafka_repo = fake_kafka
+
+    # Inject the fake registry repo (used via get_registry_repo singleton)
+    import app.repos.registry_repo as rr
+    rr._registry_repo = fake_registry
 
     from app.main import create_app
     app = create_app()

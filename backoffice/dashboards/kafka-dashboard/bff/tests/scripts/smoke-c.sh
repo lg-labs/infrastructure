@@ -70,5 +70,88 @@ echo
 echo "==> C.6 BackOffice regression check"
 docker ps --filter "name=lg-infra-backoffice" --format "{{.Names}}: {{.Status}}"
 
+# ============================================================
+# Phase D — Schemas (Schema Registry proxy)
+# Smoke fixture: lglabs.smoke.d.events-value (auto-evolves on each run)
+# ============================================================
+SUBJ=lglabs.smoke.d.events-value
+T_OP=$(cat /tmp/kd-token-operator)
+
+echo
+echo "==> D.0 SR reachable + subject present"
+curl -s -H "Authorization: Bearer $T_ADMIN" "$GW$PREFIX/api/health" | python3 -m json.tool | grep -E '"(status|kafka|registry)"'
+curl -s -o /dev/null -w "  GET /schemas → %{http_code}\n" -H "Authorization: Bearer $T_ADMIN" "$GW$PREFIX/api/schemas"
+curl -s -o /dev/null -w "  GET /schemas/$SUBJ → %{http_code}\n" -H "Authorization: Bearer $T_ADMIN" "$GW$PREFIX/api/schemas/$SUBJ"
+
+echo
+echo "==> D.1/D.2 register a compatible new version (adds optional field with default)"
+# Discover next field index so the schema is always backward-compatible AND new
+NEXT=$(curl -s -H "Authorization: Bearer $T_ADMIN" "$GW$PREFIX/api/schemas/$SUBJ" \
+  | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+last = d['versions'][-1]['schema']
+s = json.loads(last)
+fields = s.get('fields', [])
+n = sum(1 for f in fields if f['name'].startswith('note_'))
+print(n + 1)
+")
+echo "  next field: note_$NEXT"
+export NEXT
+NEW_SCHEMA=$(curl -s -H "Authorization: Bearer $T_ADMIN" "$GW$PREFIX/api/schemas/$SUBJ" \
+  | python3 -c "
+import sys, json, os
+d = json.load(sys.stdin)
+last = d['versions'][-1]['schema']
+s = json.loads(last)
+n = int(os.environ['NEXT'])
+s['fields'].append({'name': f'note_{n}', 'type': ['null','string'], 'default': None})
+print(json.dumps(s))
+")
+export NEW_SCHEMA
+PAYLOAD=$(python3 -c "import json,os;print(json.dumps({'schema': os.environ['NEW_SCHEMA'], 'schema_type':'AVRO'}))")
+RESP=$(curl -s -X POST -H "Authorization: Bearer $T_OP" -H "Content-Type: application/json" \
+  -d "$PAYLOAD" "$GW$PREFIX/api/schemas/$SUBJ/versions")
+echo "  POST as operator → $RESP"
+
+echo
+echo "==> D.3 register an INCOMPATIBLE schema → expect 409 incompatible_schema"
+# Ensure compat=BACKWARD so removing a field is genuinely incompatible
+curl -s -o /dev/null -X PUT -H "Authorization: Bearer $T_OP" -H "Content-Type: application/json" \
+  -d '{"compatibility_level":"BACKWARD"}' "$GW$PREFIX/api/schemas/$SUBJ/config"
+export BAD='{"type":"record","name":"Event","namespace":"lglabs.smoke.d","fields":[{"name":"only_required","type":"string"}]}'
+BADPAYLOAD=$(python3 -c "import json,os;print(json.dumps({'schema': os.environ['BAD'], 'schema_type':'AVRO'}))")
+curl -s -o /tmp/kd-d3.json -w "  HTTP %{http_code}\n" -X POST -H "Authorization: Bearer $T_OP" \
+  -H "Content-Type: application/json" -d "$BADPAYLOAD" "$GW$PREFIX/api/schemas/$SUBJ/versions"
+python3 -c "import json;d=json.load(open('/tmp/kd-d3.json'));print('  error=',d.get('error'),'  sr_message present=',bool(d.get('details',{}).get('sr_message')))"
+
+echo
+echo "==> D.4 set compatibility level (operator)"
+for L in FORWARD BACKWARD; do
+  code=$(curl -s -o /dev/null -w "%{http_code}" -X PUT -H "Authorization: Bearer $T_OP" \
+    -H "Content-Type: application/json" -d "{\"compatibility_level\":\"$L\"}" \
+    "$GW$PREFIX/api/schemas/$SUBJ/config")
+  echo "  PUT compat=$L → $code"
+done
+
+echo
+echo "==> D.5 export subject (admin)"
+curl -s -o /tmp/kd-d5.json -w "  HTTP %{http_code}\n" -H "Authorization: Bearer $T_ADMIN" \
+  "$GW$PREFIX/api/schemas/$SUBJ/export"
+python3 -c "import json;d=json.load(open('/tmp/kd-d5.json'));print('  subject=',d.get('subject'),' versions=',len(d.get('versions',[])))"
+
+echo
+echo "==> D.6 role matrix on schemas mutating endpoints"
+for r in admin operator support viewer; do
+  T=$(cat /tmp/kd-token-$r)
+  c1=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $T" "$GW$PREFIX/api/schemas")
+  c2=$(curl -s -o /dev/null -w "%{http_code}" -X PUT -H "Authorization: Bearer $T" \
+    -H "Content-Type: application/json" -d '{"compatibility_level":"BACKWARD"}' \
+    "$GW$PREFIX/api/schemas/$SUBJ/config")
+  c3=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $T" \
+    "$GW$PREFIX/api/schemas/$SUBJ/export")
+  echo "  $r → LIST=$c1  SET_COMPAT=$c2  EXPORT=$c3"
+done
+
 echo
 echo "==> done"

@@ -181,25 +181,25 @@ Antes de empezar **cualquier** fase:
 
 ### D.1 — Registry repo
 
-- [ ] **D.1.1** `app/repos/registry_repo.py`: cliente HTTP con httpx contra `SCHEMA_REGISTRY_URL`.
-- [ ] **D.1.2** Métodos: `list_subjects`, `get_versions`, `get_version`, `register_schema`, `set_compatibility`.
-- [ ] **D.1.3** Re-emisión transparente del 409 incompatible (design §A5).
+- [x] **D.1.1** `app/repos/registry_repo.py`: cliente HTTP con httpx contra `SCHEMA_REGISTRY_URL`.
+- [x] **D.1.2** Métodos: `list_subjects`, `get_versions`, `get_version`, `register_schema`, `set_compatibility`.
+- [x] **D.1.3** Re-emisión transparente del 409 incompatible (design §A5).
 
 ### D.2 — Endpoints schemas
 
-- [ ] **D.2.1** `app/routers/schemas.py` con 5 endpoints (design §3.4).
-- [ ] **D.2.2** `GET /api/schemas/{subject}/export` (US-9 para schemas).
+- [x] **D.2.1** `app/routers/schemas.py` con 5 endpoints (design §3.4).
+- [x] **D.2.2** `GET /api/schemas/{subject}/export` (US-9 para schemas).
 
 ### D.3 — Frontend schemas
 
-- [ ] **D.3.1** `frontend/schemas.html`: lista subjects.
-- [ ] **D.3.2** `frontend/schema-detail.html`: versiones + diff + form de nueva versión.
-- [ ] **D.3.3** Selector de `compatibility_level` (admin/operator).
+- [x] **D.3.1** `frontend/schemas.html`: lista subjects. _(implementado como vista `#/schemas` en SPA, no archivo separado)_
+- [x] **D.3.2** `frontend/schema-detail.html`: versiones + diff + form de nueva versión. _(implementado como vista `#/schemas/<subject>` en SPA)_
+- [x] **D.3.3** Selector de `compatibility_level` (admin/operator).
 
 ### D.4 — Smoke tests Fase D
 
-- [ ] **D.4.1** Registrar schema AVRO simple, evolucionar compatible, intentar incompatible (debe fallar limpio con 409).
-- [ ] **D.4.2** Cambiar compatibility level y verificar.
+- [x] **D.4.1** Registrar schema AVRO simple, evolucionar compatible, intentar incompatible (debe fallar limpio con 409).
+- [x] **D.4.2** Cambiar compatibility level y verificar.
 
 **Cierre Fase D**: US-5, US-6 implementadas. AKHQ y la nueva UI muestran los mismos subjects.
 

@@ -9,6 +9,7 @@ from ..deps import require_reader
 from ..models.domain import SummaryResp
 from ..repos import topic_metadata_repo
 from ..repos.kafka_repo import get_kafka_repo, is_internal
+from ..repos.registry_repo import get_registry_repo
 
 router = APIRouter(tags=["summary"])
 log = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ log = logging.getLogger(__name__)
 
 @router.get("/summary", response_model=SummaryResp, dependencies=[Depends(require_reader)])
 def summary() -> SummaryResp:
-    components = {"kafka": "ok", "registry": "unknown", "sqlite": "ok"}
+    components = {"kafka": "ok", "registry": "ok", "sqlite": "ok"}
     brokers = 0
     topics_total = 0
     topics_internal_hidden = 0
@@ -35,6 +36,14 @@ def summary() -> SummaryResp:
         log.warning("summary: kafka error: %s", e)
         components["kafka"] = "degraded"
 
+    # Schemas count via SR
+    schemas_total = 0
+    try:
+        schemas_total = len(get_registry_repo().list_subjects())
+    except Exception as e:
+        log.warning("summary: registry error: %s", e)
+        components["registry"] = "degraded"
+
     # ACL count — table exists from Phase B migrations even if router lands in Phase E
     try:
         from ..repos.db import get_conn
@@ -48,7 +57,7 @@ def summary() -> SummaryResp:
         brokers_alive=brokers,
         topics_total=topics_total,
         topics_internal_hidden=topics_internal_hidden,
-        schemas_total=0,             # Phase D
+        schemas_total=schemas_total,
         acl_metadata_total=acl_total,
         components=components,
     )

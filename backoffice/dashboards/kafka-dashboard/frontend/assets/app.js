@@ -16,12 +16,18 @@ window.kd = (function () {
     invalid_owner:           "Owner no válido. Selecciona uno del catálogo.",
     invalid_partitions:      "Número de particiones inválido. Solo se pueden incrementar.",
     invalid_rf:              "Replication factor inválido (debe ser ≤ número de brokers).",
+    invalid_schema:          "El schema enviado es inválido o no se puede parsear.",
+    invalid_compatibility_level: "Nivel de compatibilidad no válido.",
     internal_topic_protected:"Los topics internos (prefijo __ o _) no se pueden modificar.",
     topic_not_found:         "El topic no existe.",
+    subject_not_found:       "El subject de schema no existe.",
+    schema_version_not_found:"Esa versión del schema no existe.",
     topic_already_exists:    "Ya existe un topic con ese nombre.",
+    incompatible_schema:     "El schema es incompatible con el nivel de compatibilidad configurado.",
     confirmation_required:   "Falta confirmación. Escribe el nombre exacto del recurso.",
     kafka_unavailable:       "El cluster de Kafka no responde.",
     registry_unavailable:    "El Schema Registry no responde.",
+    registry_error:          "Error en el Schema Registry.",
     forbidden:               "No tienes permisos para esta acción.",
     validation_error:        "Datos inválidos en el formulario.",
     internal_error:          "Error interno del servidor.",
@@ -91,13 +97,15 @@ window.kd = (function () {
   }
 
   // ---- Hash router ----
-  // Routes: #/, #/topics, #/topics/<name>
+  // Routes: #/, #/topics, #/topics/<name>, #/schemas, #/schemas/<subject>
   function parseHash() {
     const h = (location.hash || "#/").slice(1);          // "/", "/topics", "/topics/lglabs.foo"
-    const parts = h.split("/").filter(Boolean);          // [], ["topics"], ["topics","name"]
+    const parts = h.split("/").filter(Boolean);
     if (parts.length === 0) return { view: "home" };
     if (parts[0] === "topics" && parts.length === 1) return { view: "topics" };
     if (parts[0] === "topics" && parts.length >= 2) return { view: "topic-detail", name: decodeURIComponent(parts.slice(1).join("/")) };
+    if (parts[0] === "schemas" && parts.length === 1) return { view: "schemas" };
+    if (parts[0] === "schemas" && parts.length >= 2) return { view: "schema-detail", subject: decodeURIComponent(parts.slice(1).join("/")) };
     return { view: "home" };
   }
 

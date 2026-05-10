@@ -21,6 +21,7 @@
       <nav class="flex gap-3 text-sm">
         <a href="#/" class="hover:underline" :class="route.view==='home' ? 'text-amber-300' : ''">Inicio</a>
         <a href="#/topics" class="hover:underline" :class="route.view==='topics' || route.view==='topic-detail' ? 'text-amber-300' : ''">Topics</a>
+        <a href="#/schemas" class="hover:underline" :class="route.view==='schemas' || route.view==='schema-detail' ? 'text-amber-300' : ''">Schemas</a>
       </nav>
       <div class="flex-1"></div>
       <div class="text-sm flex items-center gap-3">
@@ -41,7 +42,7 @@
 
   <!-- Banner if cluster degraded -->
   <div x-show="health.status==='degraded'" class="bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 text-center">
-    Kafka reporta estado <strong x-text="health.kafka"></strong>. Algunas operaciones pueden fallar.
+    Estado degradado · kafka=<strong x-text="health.kafka"></strong> · registry=<strong x-text="health.registry"></strong>. Algunas operaciones pueden fallar.
   </div>
 
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
@@ -333,6 +334,157 @@
       </div>
     </section>
 
+    <!-- ============== SCHEMAS LIST VIEW ============== -->
+    <section x-show="route.view==='schemas'" x-data="schemasView()" x-init="load()" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-semibold">Schemas</h1>
+      </div>
+
+      <div class="flex gap-2 items-center">
+        <input type="search" x-model.debounce.200ms="search" placeholder="Filtrar subjects…"
+               class="border rounded px-3 py-1 text-sm w-72" />
+        <span class="text-xs text-slate-500" x-text="`${filtered.length} / ${items.length} subjects`"></span>
+      </div>
+
+      <div x-show="loading" class="text-slate-500 text-sm">Cargando…</div>
+      <div x-show="!loading && items.length===0" class="text-slate-500 text-sm italic">
+        No hay subjects registrados en el Schema Registry.
+      </div>
+
+      <div x-show="!loading && items.length>0" class="bg-white rounded shadow overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-700 text-left">
+            <tr>
+              <th class="px-3 py-2">Subject</th>
+              <th class="px-3 py-2">Versión más reciente</th>
+              <th class="px-3 py-2">Compatibilidad</th>
+              <th class="px-3 py-2">Tipo</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="s in filtered" :key="s.subject">
+              <tr class="border-t hover:bg-slate-50">
+                <td class="px-3 py-2 font-mono text-xs">
+                  <a :href="`#/schemas/${encodeURIComponent(s.subject)}`" class="text-blue-700 hover:underline" x-text="s.subject"></a>
+                </td>
+                <td class="px-3 py-2" x-text="`v${s.latest_version}`"></td>
+                <td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-slate-100 text-xs" x-text="s.compatibility_level"></span></td>
+                <td class="px-3 py-2 text-xs" x-text="s.schema_type"></td>
+                <td class="px-3 py-2 text-right">
+                  <a :href="`#/schemas/${encodeURIComponent(s.subject)}`" class="text-blue-600 hover:underline text-xs">detalle →</a>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============== SCHEMA DETAIL VIEW ============== -->
+    <section x-show="route.view==='schema-detail'" x-data="schemaDetailView()" x-init="load(route.subject)" class="space-y-4" :key="route.subject">
+      <div>
+        <a href="#/schemas" class="text-blue-600 hover:underline text-sm">← schemas</a>
+        <h1 class="text-2xl font-semibold mt-2 font-mono break-all" x-text="subject"></h1>
+      </div>
+
+      <div x-show="loading" class="text-slate-500 text-sm">Cargando…</div>
+
+      <template x-if="!loading && data">
+        <div class="space-y-4">
+          <!-- Compatibility config -->
+          <div class="bg-white rounded shadow p-4 flex items-center gap-4 flex-wrap">
+            <div>
+              <div class="text-xs text-slate-500">Compatibilidad actual</div>
+              <div class="text-lg font-semibold" x-text="data.compatibility_level"></div>
+            </div>
+            <div class="flex-1"></div>
+            <div x-show="user.is_writer" class="flex items-center gap-2">
+              <select x-model="newCompat" class="border rounded px-2 py-1 text-sm">
+                <template x-for="c in COMPAT_LEVELS" :key="c">
+                  <option :value="c" x-text="c"></option>
+                </template>
+              </select>
+              <button @click="changeCompat()"
+                      :disabled="changing || newCompat===data.compatibility_level"
+                      class="bg-slate-700 text-white text-sm px-3 py-1 rounded disabled:bg-slate-300">
+                Cambiar
+              </button>
+            </div>
+          </div>
+
+          <!-- Versions list -->
+          <div class="bg-white rounded shadow p-4">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="font-semibold">Versiones</h2>
+              <button x-show="user.is_writer" @click="openRegister()"
+                      class="bg-blue-600 text-white text-sm px-3 py-1 rounded hover:bg-blue-700">
+                + Registrar nueva versión
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-2 mb-3">
+              <template x-for="v in data.versions" :key="v.version">
+                <button @click="selectedVersion = v.version"
+                        :class="selectedVersion===v.version ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'"
+                        class="text-xs px-2 py-1 rounded hover:bg-blue-500 hover:text-white"
+                        x-text="`v${v.version} (id ${v.id})`"></button>
+              </template>
+            </div>
+
+            <template x-if="currentVersion">
+              <div class="space-y-3">
+                <div class="text-xs text-slate-500" x-text="`Tipo: ${currentVersion.schema_type}`"></div>
+                <pre class="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto" x-text="prettySchema(currentVersion.schema)"></pre>
+                <div x-show="diffText" class="space-y-1">
+                  <div class="text-xs text-slate-500">Diff con la versión anterior:</div>
+                  <pre class="bg-slate-100 text-slate-800 text-xs p-3 rounded overflow-x-auto" x-text="diffText"></pre>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- Export -->
+          <div x-show="user.is_writer">
+            <button @click="exportSubject()" class="bg-emerald-700 text-white text-sm px-3 py-1.5 rounded hover:bg-emerald-800">
+              Exportar JSON
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <!-- Register modal -->
+      <div x-show="showRegister" x-cloak
+           class="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
+        <div class="bg-white rounded-lg shadow-lg max-w-3xl w-full p-5 space-y-3">
+          <h3 class="text-lg font-semibold">Registrar nueva versión</h3>
+          <p class="text-xs text-slate-500">
+            El BFF re-emite el error <code>incompatible_schema</code> tal cual del Schema Registry
+            si el schema no es compatible con el nivel <strong x-text="data && data.compatibility_level"></strong>.
+          </p>
+          <label class="block text-sm">
+            Tipo
+            <select x-model="form.schema_type" class="border rounded px-2 py-1 text-sm w-full">
+              <option value="AVRO">AVRO</option>
+              <option value="JSON">JSON</option>
+              <option value="PROTOBUF">PROTOBUF</option>
+            </select>
+          </label>
+          <label class="block text-sm">
+            Schema (texto plano — para AVRO se valida JSON al enviar)
+            <textarea x-model="form.schema" rows="14"
+                      class="font-mono text-xs border rounded px-2 py-1 w-full"></textarea>
+          </label>
+          <div class="flex justify-end gap-2 pt-2">
+            <button @click="showRegister=false" :disabled="registering" class="px-3 py-1 rounded text-sm bg-slate-200 hover:bg-slate-300">Cancelar</button>
+            <button @click="submitRegister()" :disabled="registering || !form.schema.trim()"
+                    class="px-3 py-1 rounded text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300">
+              Registrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <footer class="bg-slate-100 text-slate-500 text-xs py-3 text-center border-t">
@@ -551,6 +703,149 @@
             a.download = `${this.topic.name}.json`;
             document.body.appendChild(a); a.click(); a.remove();
             URL.revokeObjectURL(url);
+            kd.toast("success", "Export descargado");
+          } catch (e) {
+            kd.toast("error", kd.humanizeError(e, "Export falló"));
+          }
+        },
+      };
+    }
+
+    function schemasView() {
+      return {
+        loading: true,
+        items: [],
+        search: "",
+        get filtered() {
+          if (!this.search) return this.items;
+          const s = this.search.toLowerCase();
+          return this.items.filter(it => it.subject.toLowerCase().includes(s));
+        },
+        async load() {
+          this.loading = true;
+          try {
+            const r = await kd.call("GET", "/schemas");
+            this.items = r.items || [];
+          } catch (e) {
+            kd.toast("error", kd.humanizeError(e, "Error al listar schemas"));
+            this.items = [];
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+
+    function schemaDetailView() {
+      return {
+        subject: "",
+        loading: true,
+        data: null,                 // {subject, compatibility_level, versions:[]}
+        selectedVersion: null,
+        diffText: null,
+        newCompat: "BACKWARD",
+        changing: false,
+        showRegister: false,
+        registering: false,
+        form: { schema: "", schema_type: "AVRO" },
+        COMPAT_LEVELS: ["BACKWARD","BACKWARD_TRANSITIVE","FORWARD","FORWARD_TRANSITIVE","FULL","FULL_TRANSITIVE","NONE"],
+
+        async load(subject) {
+          this.subject = subject;
+          this.loading = true;
+          this.data = null;
+          this.selectedVersion = null;
+          this.diffText = null;
+          try {
+            const d = await kd.call("GET", `/schemas/${encodeURIComponent(subject)}`);
+            this.data = d;
+            this.newCompat = d.compatibility_level;
+            if (d.versions && d.versions.length) {
+              this.selectedVersion = d.versions[d.versions.length - 1].version;
+              this.$watch("selectedVersion", () => this.refreshDiff());
+              await this.refreshDiff();
+            }
+          } catch (e) {
+            kd.toast("error", kd.humanizeError(e, "Error al cargar el subject"));
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        get currentVersion() {
+          if (!this.data || this.selectedVersion == null) return null;
+          return this.data.versions.find(v => v.version === this.selectedVersion) || null;
+        },
+
+        prettySchema(s) {
+          if (!s) return "";
+          try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; }
+        },
+
+        async refreshDiff() {
+          this.diffText = null;
+          if (!this.selectedVersion || this.selectedVersion <= 1) return;
+          try {
+            const v = await kd.call("GET",
+              `/schemas/${encodeURIComponent(this.subject)}/versions/${this.selectedVersion}`);
+            this.diffText = v.diff_with_previous || null;
+          } catch (e) {
+            // Non-fatal: just hide the diff section
+            this.diffText = null;
+          }
+        },
+
+        async changeCompat() {
+          this.changing = true;
+          try {
+            await kd.call("PUT", `/schemas/${encodeURIComponent(this.subject)}/config`,
+              { body: { compatibility_level: this.newCompat } });
+            this.data.compatibility_level = this.newCompat;
+            kd.toast("success", `Compatibilidad cambiada a ${this.newCompat}`);
+          } catch (e) {
+            kd.toast("error", kd.humanizeError(e, "No se pudo cambiar la compatibilidad"));
+            this.newCompat = this.data.compatibility_level;
+          } finally {
+            this.changing = false;
+          }
+        },
+
+        openRegister() {
+          this.form.schema = this.currentVersion ? this.prettySchema(this.currentVersion.schema) : "";
+          this.form.schema_type = this.currentVersion ? this.currentVersion.schema_type : "AVRO";
+          this.showRegister = true;
+        },
+
+        async submitRegister() {
+          this.registering = true;
+          try {
+            const r = await kd.call("POST",
+              `/schemas/${encodeURIComponent(this.subject)}/versions`,
+              { body: { schema: this.form.schema, schema_type: this.form.schema_type } });
+            kd.toast("success", `Versión v${r.version} registrada (id ${r.id})`);
+            this.showRegister = false;
+            await this.load(this.subject);  // reload everything
+          } catch (e) {
+            // The 'incompatible_schema' SR message is shown raw in the toast for clarity
+            const detail = e && e.details && e.details.sr_message;
+            kd.toast("error", kd.humanizeError(e, "No se pudo registrar"));
+            if (detail) console.warn("SR detail:", detail);
+          } finally {
+            this.registering = false;
+          }
+        },
+
+        async exportSubject() {
+          try {
+            const url = `${kd.API_BASE}/schemas/${encodeURIComponent(this.subject)}/export`;
+            const resp = await fetch(url, { credentials: "same-origin" });
+            if (!resp.ok) throw await resp.json().catch(() => ({}));
+            const blob = await resp.blob();
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `${this.subject}.json`;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(a.href);
             kd.toast("success", "Export descargado");
           } catch (e) {
             kd.toast("error", kd.humanizeError(e, "Export falló"));

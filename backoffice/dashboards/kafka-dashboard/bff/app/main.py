@@ -18,7 +18,7 @@ from .errors import DomainError
 from .middleware.audit import AuditMiddleware
 from .owners import load_owners
 from .repos.db import run_migrations
-from .routers import health, meta, summary, topics
+from .routers import health, meta, schemas, summary, topics
 from .settings import settings
 
 
@@ -71,6 +71,7 @@ def create_app() -> FastAPI:
     app.include_router(meta.router, prefix="/api")
     app.include_router(summary.router, prefix="/api")
     app.include_router(topics.router, prefix="/api")
+    app.include_router(schemas.router, prefix="/api")
 
     # ---- Error handlers (design.md §7.2 envelope) ----
     @app.exception_handler(DomainError)

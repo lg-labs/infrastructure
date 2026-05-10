@@ -42,6 +42,22 @@ class InvalidReplicationFactor(DomainError):
                          {"replication_factor": rf, "brokers_available": brokers})
 
 
+class InvalidSchema(DomainError):
+    """Schema body is malformed (SR error codes 42201/42202)."""
+
+    def __init__(self, subject: str, sr_message: str, sr_error_code: int | None = None):
+        super().__init__(400, "invalid_schema", "schema body is malformed",
+                         {"subject": subject, "sr_message": sr_message,
+                          "sr_error_code": sr_error_code})
+
+
+class InvalidCompatibilityLevel(DomainError):
+    def __init__(self, given: str, allowed: list[str]):
+        super().__init__(400, "invalid_compatibility_level",
+                         "compatibility_level must be one of the allowed values",
+                         {"given": given, "allowed": allowed})
+
+
 # 403
 class InternalTopicProtected(DomainError):
     def __init__(self, name: str):
@@ -56,7 +72,30 @@ class TopicNotFound(DomainError):
         super().__init__(404, "topic_not_found", f"topic {name!r} does not exist", {"name": name})
 
 
+class SubjectNotFound(DomainError):
+    def __init__(self, subject: str):
+        super().__init__(404, "subject_not_found",
+                         f"schema subject {subject!r} does not exist", {"subject": subject})
+
+
+class SchemaVersionNotFound(DomainError):
+    def __init__(self, subject: str, version: str | int):
+        super().__init__(404, "schema_version_not_found",
+                         f"version {version!r} of subject {subject!r} does not exist",
+                         {"subject": subject, "version": version})
+
+
 # 409
+class IncompatibleSchema(DomainError):
+    """Re-emitted from Schema Registry verbatim (design §A5)."""
+
+    def __init__(self, subject: str, sr_message: str, sr_error_code: int | None = None):
+        super().__init__(409, "incompatible_schema",
+                         "schema is incompatible with the configured compatibility level",
+                         {"subject": subject, "sr_message": sr_message,
+                          "sr_error_code": sr_error_code})
+
+
 class TopicAlreadyExists(DomainError):
     def __init__(self, name: str):
         super().__init__(409, "topic_already_exists",

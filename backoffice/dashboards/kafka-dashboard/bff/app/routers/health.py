@@ -7,6 +7,7 @@ from fastapi import APIRouter, Header
 from kafka.errors import NoBrokersAvailable
 
 from ..repos.kafka_repo import get_kafka_repo
+from ..repos.registry_repo import get_registry_repo
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -23,10 +24,13 @@ def health() -> dict:
         log.warning("kafka health probe failed: %s", e)
         kafka_status = "degraded"
 
+    registry_status = "ok" if get_registry_repo().alive() else "degraded"
+
+    overall = "ok" if (kafka_status == "ok" and registry_status == "ok") else "degraded"
     return {
-        "status": "ok" if kafka_status == "ok" else "degraded",
+        "status": overall,
         "kafka": kafka_status,
-        "registry": "unknown",   # Phase D will probe
+        "registry": registry_status,
         "sqlite": "ok",          # if we got here, sqlite is fine
     }
 

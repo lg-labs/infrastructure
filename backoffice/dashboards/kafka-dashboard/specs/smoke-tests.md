@@ -419,7 +419,73 @@ docker ps --filter "name=lg-infra-backoffice" --format "{{.Names}}: {{.Status}}"
 
 ## Fase D · Schemas
 
-> _Pendiente._
+> Estado: **PASS** (validado contra `schema-registry` real en `lg-infra-kafka_default`).
+> Fixture vivo: subject `lglabs.smoke.d.events-value` (queda en el SR como dato de prueba — el script lo evoluciona, no lo borra).
+> Script automatizable: `bff/tests/scripts/smoke-c.sh` (cubre Fase C + Fase D).
+
+### D.0 — SR alcanzable + subject fixture presente
+
+```
+GET /kafka/api/health → status=ok, kafka=ok, registry=ok
+GET /kafka/api/schemas → 200
+GET /kafka/api/schemas/lglabs.smoke.d.events-value → 200
+```
+
+### D.1 / D.2 — Registrar nueva versión compatible (operator)
+
+El script descubre el siguiente `note_N` libre y agrega un campo opcional con default
+`null`. Bajo `compatibility=BACKWARD` debe ser aceptado por el SR y devolver
+`{id, version}` re-fetchado por el BFF (§A5 design).
+
+```
+POST /kafka/api/schemas/lglabs.smoke.d.events-value/versions  (operator)
+→ {"id":3,"version":3}
+```
+
+### D.3 — Schema incompatible → re-emisión 409 verbatim
+
+Pre-condición: el script fija `compatibility=BACKWARD` antes del intento. Se envía un
+schema que elimina campos requeridos.
+
+```
+POST /kafka/api/schemas/lglabs.smoke.d.events-value/versions  (operator)
+→ HTTP 409
+→ body.error = "incompatible_schema"
+→ body.details.sr_message presente (mensaje verbatim del Schema Registry, p.ej.
+  "READER_FIELD_MISSING_DEFAULT_VALUE: …")
+```
+
+### D.4 — Cambio de compatibilidad (operator)
+
+```
+PUT /kafka/api/schemas/lglabs.smoke.d.events-value/config  body={"compatibility_level":"FORWARD"}  → 200
+PUT /kafka/api/schemas/lglabs.smoke.d.events-value/config  body={"compatibility_level":"BACKWARD"} → 200
+```
+
+### D.5 — Export de subject (admin)
+
+```
+GET /kafka/api/schemas/lglabs.smoke.d.events-value/export  (admin)
+→ HTTP 200
+→ payload con subject + 3 versions (en el momento del PASS)
+```
+
+### D.6 — Matriz role × endpoint (LIST / SET_COMPAT / EXPORT)
+
+| Rol      | LIST `/schemas` | PUT `/schemas/<s>/config` | GET `/schemas/<s>/export` |
+|----------|----------------:|--------------------------:|--------------------------:|
+| admin    | 200             | 200                       | 200                       |
+| operator | 200             | 200                       | 200                       |
+| support  | 200             | 403                       | 403                       |
+| viewer   | 200             | 403                       | 403                       |
+
+Coincide con design §7 (acciones de schemas son writer-only; export idem por
+defensa-en-profundidad en BFF).
+
+### D.7 — Sin regresiones en BackOffice
+
+Validado dentro del mismo script (sección C.6): contenedores BackOffice siguen `healthy`
+(salvo el pre-existente `lg-infra-backoffice-gateway: unhealthy`).
 
 ---
 
