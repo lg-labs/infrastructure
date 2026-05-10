@@ -1,102 +1,563 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kafka Dashboard · lg-labs BackOffice</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #f5f7fa;
-            color: #1f2937;
-            padding: 2rem;
-            line-height: 1.5;
-        }
-        .container { max-width: 900px; margin: 0 auto; }
-        header {
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
-            color: white;
-            padding: 2rem;
-            border-radius: 12px;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-        header h1 { font-size: 2rem; margin-bottom: 0.5rem; }
-        header p { opacity: 0.9; }
-        .badge {
-            display: inline-block;
-            background: rgba(255,255,255,0.2);
-            padding: 0.25rem 0.75rem;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            margin-top: 0.5rem;
-        }
-        .card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-            border-left: 4px solid #4f46e5;
-        }
-        .card h2 { font-size: 1.1rem; margin-bottom: 0.5rem; color: #4f46e5; }
-        .card .meta { font-size: 0.85rem; color: #6b7280; margin-top: 0.5rem; font-family: ui-monospace, monospace; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
-        .pill {
-            background: #ecfdf5;
-            color: #065f46;
-            padding: 0.25rem 0.75rem;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            display: inline-block;
-        }
-        a { color: #4f46e5; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        footer { margin-top: 3rem; text-align: center; color: #9ca3af; font-size: 0.85rem; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kafka Dashboard · LG Labs</title>
+  <script src="/kafka/assets/tailwind.min.js"></script>
+  <script src="/kafka/assets/app.js"></script>
+  <script defer src="/kafka/assets/alpine.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  </style>
 </head>
-<body>
-    <div class="container">
-        <header>
-            <h1>Kafka Dashboard</h1>
-            <p>Gestión centralizada de topics, schemas y ACL-metadata del cluster <strong>lg-labs</strong>.</p>
-            <span class="badge">Fase A · Andamiaje · Placeholder</span>
-        </header>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" x-data="appShell()" x-init="init()" x-cloak>
 
-        <div class="card">
-            <h2>Estado actual</h2>
-            <p>Esta página es un <strong>placeholder de la Fase A</strong>. La UI funcional (listado de topics, creación, schemas, ACLs) llegará en las Fases C–E.</p>
-            <p class="meta">Spec: <code>backoffice/dashboards/kafka-dashboard/specs/tasks.md</code></p>
-        </div>
-
-        <div class="card">
-            <h2>Verificación SSO</h2>
-            <p>Si llegaste aquí <strong>sin que te pidieran login</strong>, el SSO heredado del BackOffice funciona correctamente.</p>
-            <p class="meta">Identidad detectada por el BFF: <a href="./api/whoami">/kafka/api/whoami</a></p>
-        </div>
-
-        <div class="grid">
-            <div class="card">
-                <h2>Topics</h2>
-                <p>Listar, crear, editar, borrar.</p>
-                <span class="pill">Pendiente · Fase C</span>
-            </div>
-            <div class="card">
-                <h2>Schemas</h2>
-                <p>Subjects de Schema Registry.</p>
-                <span class="pill">Pendiente · Fase D</span>
-            </div>
-            <div class="card">
-                <h2>ACL-metadata</h2>
-                <p>Documentación de permisos.</p>
-                <span class="pill">Pendiente · Fase E</span>
-            </div>
-        </div>
-
-        <footer>
-            <p>← <a href="/">Volver al BackOffice</a></p>
-        </footer>
+  <!-- ============== Top bar ============== -->
+  <header class="bg-slate-800 text-white shadow">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
+      <a href="#/" class="text-lg font-semibold hover:underline">Kafka Dashboard</a>
+      <nav class="flex gap-3 text-sm">
+        <a href="#/" class="hover:underline" :class="route.view==='home' ? 'text-amber-300' : ''">Inicio</a>
+        <a href="#/topics" class="hover:underline" :class="route.view==='topics' || route.view==='topic-detail' ? 'text-amber-300' : ''">Topics</a>
+      </nav>
+      <div class="flex-1"></div>
+      <div class="text-sm flex items-center gap-3">
+        <span x-show="health.status==='ok'" class="inline-flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-green-400"></span>
+          <span class="text-slate-300">cluster ok</span>
+        </span>
+        <span x-show="health.status==='degraded'" class="inline-flex items-center gap-1 text-amber-300">
+          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span x-text="`degraded: kafka=${health.kafka}`"></span>
+        </span>
+        <span class="text-slate-300" x-text="user.user || 'anon'"></span>
+        <span class="text-xs px-2 py-0.5 rounded bg-slate-700" x-text="user.role || '—'"></span>
+        <a href="/" class="text-slate-300 hover:underline">← BackOffice</a>
+      </div>
     </div>
+  </header>
+
+  <!-- Banner if cluster degraded -->
+  <div x-show="health.status==='degraded'" class="bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 text-center">
+    Kafka reporta estado <strong x-text="health.kafka"></strong>. Algunas operaciones pueden fallar.
+  </div>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+
+    <!-- ============== HOME VIEW (summary) ============== -->
+    <section x-show="route.view==='home'" x-data="homeView()" x-init="load()" class="space-y-6">
+      <h1 class="text-2xl font-semibold">Resumen</h1>
+      <div x-show="loading" class="text-slate-500">Cargando…</div>
+      <div x-show="!loading && summary" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded shadow p-4">
+          <div class="text-xs text-slate-500 uppercase">Brokers</div>
+          <div class="text-3xl font-semibold mt-1" x-text="summary.brokers_alive"></div>
+        </div>
+        <div class="bg-white rounded shadow p-4">
+          <div class="text-xs text-slate-500 uppercase">Topics</div>
+          <div class="text-3xl font-semibold mt-1" x-text="summary.topics_total"></div>
+          <div class="text-xs text-slate-400" x-text="`(${summary.topics_internal_hidden} internos ocultos)`"></div>
+        </div>
+        <div class="bg-white rounded shadow p-4">
+          <div class="text-xs text-slate-500 uppercase">Schemas</div>
+          <div class="text-3xl font-semibold mt-1 text-slate-400" x-text="summary.schemas_total"></div>
+          <div class="text-xs text-slate-400">(Fase D)</div>
+        </div>
+        <div class="bg-white rounded shadow p-4">
+          <div class="text-xs text-slate-500 uppercase">ACL-metadata</div>
+          <div class="text-3xl font-semibold mt-1 text-slate-400" x-text="summary.acl_metadata_total"></div>
+          <div class="text-xs text-slate-400">(Fase E)</div>
+        </div>
+      </div>
+      <div x-show="!loading && summary" class="bg-white rounded shadow p-4">
+        <h2 class="text-sm font-semibold uppercase text-slate-500 mb-2">Componentes</h2>
+        <div class="flex gap-4 text-sm">
+          <template x-for="(state, name) in summary.components" :key="name">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full" :class="state==='ok' ? 'bg-green-500' : (state==='degraded' ? 'bg-amber-500' : 'bg-slate-400')"></span>
+              <span x-text="`${name}: ${state}`"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============== TOPICS LIST VIEW ============== -->
+    <section x-show="route.view==='topics'" x-data="topicsView()" x-init="load()" class="space-y-4">
+      <div class="flex items-center gap-3 flex-wrap">
+        <h1 class="text-2xl font-semibold">Topics</h1>
+        <div class="flex-1"></div>
+        <input type="search" x-model="search" @input.debounce.300ms="load()" placeholder="Buscar…"
+               class="px-3 py-1.5 border rounded text-sm w-48" />
+        <label class="text-sm flex items-center gap-1">
+          <input type="checkbox" x-model="includeInternal" @change="load()" />
+          internos
+        </label>
+        <button x-show="user.is_writer" @click="openCreate()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-1.5 rounded">
+          + Crear topic
+        </button>
+      </div>
+
+      <div x-show="loading" class="text-slate-500">Cargando…</div>
+
+      <div x-show="!loading" class="bg-white rounded shadow overflow-hidden">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600 text-left">
+            <tr>
+              <th class="px-3 py-2">Nombre</th>
+              <th class="px-3 py-2 w-24 text-right">Particiones</th>
+              <th class="px-3 py-2 w-24 text-right">RF</th>
+              <th class="px-3 py-2 w-32">Owner</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="t in items" :key="t.name">
+              <tr class="border-t hover:bg-slate-50">
+                <td class="px-3 py-2 font-mono">
+                  <a :href="`#/topics/${encodeURIComponent(t.name)}`" class="text-blue-700 hover:underline" x-text="t.name"></a>
+                  <span x-show="t.is_internal" class="ml-1 text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">internal</span>
+                </td>
+                <td class="px-3 py-2 text-right" x-text="t.partitions || '—'"></td>
+                <td class="px-3 py-2 text-right" x-text="t.replication_factor || '—'"></td>
+                <td class="px-3 py-2" x-text="t.owner || '—'"></td>
+                <td class="px-3 py-2 text-right">
+                  <a :href="`#/topics/${encodeURIComponent(t.name)}`" class="text-blue-600 hover:underline text-xs">detalle →</a>
+                </td>
+              </tr>
+            </template>
+            <tr x-show="!items.length"><td colspan="5" class="px-3 py-6 text-center text-slate-500">Sin resultados.</td></tr>
+          </tbody>
+        </table>
+        <div class="px-3 py-2 border-t bg-slate-50 flex items-center gap-3 text-sm">
+          <span x-text="`${total} topics`"></span>
+          <div class="flex-1"></div>
+          <button @click="page = Math.max(1, page-1); load()" :disabled="page<=1" class="px-2 py-1 disabled:opacity-30">← anterior</button>
+          <span x-text="`página ${page}`"></span>
+          <button @click="page = page+1; load()" :disabled="page*pageSize >= total" class="px-2 py-1 disabled:opacity-30">siguiente →</button>
+        </div>
+      </div>
+
+      <!-- Create modal -->
+      <div x-show="creating" class="fixed inset-0 bg-black/40 flex items-start justify-center pt-16 z-40" @keydown.escape.window="creating=false">
+        <div class="bg-white rounded shadow-xl w-full max-w-lg p-5 space-y-3" @click.away="creating=false">
+          <h2 class="text-lg font-semibold">Crear topic</h2>
+          <form @submit.prevent="submitCreate()" class="space-y-3">
+            <label class="block">
+              <span class="text-xs uppercase text-slate-500">Nombre <span class="text-slate-400">(prefijo lglabs. obligatorio)</span></span>
+              <input x-model="form.name" required pattern="^lglabs\.[a-z0-9]([a-z0-9._-]*[a-z0-9])?$"
+                     class="w-full border rounded px-2 py-1 font-mono text-sm" placeholder="lglabs.team.events" />
+            </label>
+            <div class="grid grid-cols-3 gap-3">
+              <label class="block">
+                <span class="text-xs uppercase text-slate-500">Particiones</span>
+                <input x-model.number="form.partitions" type="number" min="1" max="100" required class="w-full border rounded px-2 py-1 text-sm" />
+              </label>
+              <label class="block">
+                <span class="text-xs uppercase text-slate-500">RF</span>
+                <input x-model.number="form.replication_factor" type="number" min="1" max="3" required class="w-full border rounded px-2 py-1 text-sm" />
+              </label>
+              <label class="block">
+                <span class="text-xs uppercase text-slate-500">min.ISR</span>
+                <input x-model.number="form.min_insync_replicas" type="number" min="1" max="3" required class="w-full border rounded px-2 py-1 text-sm" />
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="block">
+                <span class="text-xs uppercase text-slate-500">cleanup.policy</span>
+                <select x-model="form.cleanup_policy" class="w-full border rounded px-2 py-1 text-sm">
+                  <option>delete</option>
+                  <option>compact</option>
+                  <option>compact,delete</option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="text-xs uppercase text-slate-500">retention.ms</span>
+                <input x-model.number="form.retention_ms" type="number" min="60000" required class="w-full border rounded px-2 py-1 text-sm" />
+                <span class="text-xs text-slate-400" x-text="kd.fmt.ms(form.retention_ms)"></span>
+              </label>
+            </div>
+            <label class="block">
+              <span class="text-xs uppercase text-slate-500">Owner</span>
+              <select x-model="form.owner" required class="w-full border rounded px-2 py-1 text-sm">
+                <option value="">— selecciona —</option>
+                <template x-for="o in owners" :key="o.id">
+                  <option :value="o.id" x-text="`${o.id} — ${o.name}`"></option>
+                </template>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-xs uppercase text-slate-500">Descripción <span class="text-slate-400">(mín 10 chars)</span></span>
+              <textarea x-model="form.description" required minlength="10" rows="2" class="w-full border rounded px-2 py-1 text-sm"></textarea>
+            </label>
+            <div class="flex gap-2 justify-end pt-2">
+              <button type="button" @click="creating=false" class="px-3 py-1.5 rounded border">Cancelar</button>
+              <button type="submit" :disabled="submitting" class="px-3 py-1.5 rounded bg-emerald-600 text-white disabled:opacity-50">
+                <span x-text="submitting ? 'Creando…' : 'Crear'"></span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============== TOPIC DETAIL VIEW ============== -->
+    <section x-show="route.view==='topic-detail'" x-data="topicDetailView()" x-init="load(route.name)" class="space-y-4" :key="route.name">
+      <div class="flex items-center gap-3">
+        <a href="#/topics" class="text-blue-600 hover:underline text-sm">← topics</a>
+        <h1 class="text-2xl font-semibold font-mono" x-text="topic ? topic.name : route.name"></h1>
+        <span x-show="topic && topic.is_internal" class="text-xs px-2 py-0.5 rounded bg-slate-200">internal</span>
+        <div class="flex-1"></div>
+        <button x-show="topic && user.is_writer" @click="exportTopic()" class="text-sm px-3 py-1.5 rounded border">Exportar JSON</button>
+        <button x-show="topic && !topic.is_internal && user.is_writer" @click="editing=true; resetEditForm()" class="text-sm px-3 py-1.5 rounded bg-blue-600 text-white">Editar</button>
+        <button x-show="topic && !topic.is_internal && user.is_writer" @click="deleting=true; deleteConfirmText=''" class="text-sm px-3 py-1.5 rounded bg-red-600 text-white">Borrar</button>
+      </div>
+
+      <div x-show="loading" class="text-slate-500">Cargando…</div>
+      <div x-show="!loading && error" class="bg-red-50 border border-red-200 text-red-800 rounded p-3 text-sm" x-text="error"></div>
+
+      <div x-show="!loading && topic" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="bg-white rounded shadow p-4 lg:col-span-2 space-y-2">
+          <h2 class="font-semibold">Metadata</h2>
+          <dl class="grid grid-cols-2 gap-y-1 text-sm">
+            <dt class="text-slate-500">Owner</dt><dd x-text="topic.owner || '—'"></dd>
+            <dt class="text-slate-500">Descripción</dt><dd x-text="topic.description || '—'"></dd>
+            <dt class="text-slate-500">Creado</dt><dd x-text="`${kd.fmt.date(topic.created_at)} (${topic.created_by || '—'})`"></dd>
+            <dt class="text-slate-500">Actualizado</dt><dd x-text="`${kd.fmt.date(topic.updated_at)} (${topic.updated_by || '—'})`"></dd>
+          </dl>
+        </div>
+        <div class="bg-white rounded shadow p-4 space-y-2">
+          <h2 class="font-semibold">Forma</h2>
+          <dl class="grid grid-cols-2 gap-y-1 text-sm">
+            <dt class="text-slate-500">Particiones</dt><dd x-text="topic.partitions"></dd>
+            <dt class="text-slate-500">RF</dt><dd x-text="topic.replication_factor"></dd>
+            <dt class="text-slate-500">min.ISR</dt><dd x-text="topic.min_insync_replicas ?? '—'"></dd>
+            <dt class="text-slate-500">cleanup</dt><dd x-text="topic.cleanup_policy ?? '—'"></dd>
+            <dt class="text-slate-500">retention</dt><dd x-text="kd.fmt.ms(topic.retention_ms)"></dd>
+          </dl>
+        </div>
+
+        <div class="bg-white rounded shadow p-4 lg:col-span-3">
+          <h2 class="font-semibold mb-2">Configs (todas)</h2>
+          <div class="text-xs font-mono bg-slate-50 rounded p-3 overflow-x-auto">
+            <template x-for="(v, k) in topic.configs" :key="k">
+              <div><span class="text-slate-500" x-text="k"></span> = <span x-text="v"></span></div>
+            </template>
+          </div>
+        </div>
+
+        <div class="bg-white rounded shadow p-4 lg:col-span-3">
+          <h2 class="font-semibold mb-2">Particiones</h2>
+          <table class="min-w-full text-xs font-mono">
+            <thead class="text-slate-500 text-left"><tr><th class="px-2 py-1">id</th><th class="px-2 py-1">leader</th><th class="px-2 py-1">replicas</th><th class="px-2 py-1">isr</th></tr></thead>
+            <tbody>
+              <template x-for="p in topic.partitions_detail" :key="p.id">
+                <tr class="border-t">
+                  <td class="px-2 py-1" x-text="p.id"></td>
+                  <td class="px-2 py-1" x-text="p.leader"></td>
+                  <td class="px-2 py-1" x-text="p.replicas.join(', ')"></td>
+                  <td class="px-2 py-1" x-text="p.isr.join(', ')"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Edit modal -->
+      <div x-show="editing" class="fixed inset-0 bg-black/40 flex items-start justify-center pt-16 z-40" @keydown.escape.window="editing=false">
+        <div class="bg-white rounded shadow-xl w-full max-w-lg p-5 space-y-3" @click.away="editing=false">
+          <h2 class="text-lg font-semibold">Editar topic</h2>
+          <p class="text-xs text-slate-500">Solo se pueden incrementar particiones; no decrementar.</p>
+          <form @submit.prevent="submitEdit()" class="space-y-3">
+            <label class="block">
+              <span class="text-xs uppercase text-slate-500">Particiones (actual: <span x-text="topic.partitions"></span>)</span>
+              <input x-model.number="editForm.partitions" type="number" :min="topic.partitions" max="100" class="w-full border rounded px-2 py-1 text-sm" />
+            </label>
+            <label class="block">
+              <span class="text-xs uppercase text-slate-500">cleanup.policy</span>
+              <select x-model="editForm.cleanup_policy" class="w-full border rounded px-2 py-1 text-sm">
+                <option value="">(sin cambio)</option>
+                <option>delete</option><option>compact</option><option>compact,delete</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-xs uppercase text-slate-500">retention.ms</span>
+              <input x-model.number="editForm.retention_ms" type="number" min="60000" class="w-full border rounded px-2 py-1 text-sm" />
+              <span class="text-xs text-slate-400" x-text="editForm.retention_ms ? kd.fmt.ms(editForm.retention_ms) : ''"></span>
+            </label>
+            <label class="block">
+              <span class="text-xs uppercase text-slate-500">min.insync.replicas</span>
+              <input x-model.number="editForm.min_insync_replicas" type="number" min="1" max="3" class="w-full border rounded px-2 py-1 text-sm" />
+            </label>
+            <label class="block">
+              <span class="text-xs uppercase text-slate-500">Owner</span>
+              <select x-model="editForm.owner" class="w-full border rounded px-2 py-1 text-sm">
+                <option value="">(sin cambio)</option>
+                <template x-for="o in owners" :key="o.id">
+                  <option :value="o.id" x-text="`${o.id} — ${o.name}`"></option>
+                </template>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-xs uppercase text-slate-500">Descripción</span>
+              <textarea x-model="editForm.description" rows="2" minlength="10" class="w-full border rounded px-2 py-1 text-sm" placeholder="(sin cambio)"></textarea>
+            </label>
+            <div class="flex gap-2 justify-end pt-2">
+              <button type="button" @click="editing=false" class="px-3 py-1.5 rounded border">Cancelar</button>
+              <button type="submit" :disabled="submitting" class="px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-50">
+                <span x-text="submitting ? 'Guardando…' : 'Guardar'"></span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Delete confirm -->
+      <div x-show="deleting" class="fixed inset-0 bg-black/40 flex items-start justify-center pt-16 z-40" @keydown.escape.window="deleting=false">
+        <div class="bg-white rounded shadow-xl w-full max-w-md p-5 space-y-3" @click.away="deleting=false">
+          <h2 class="text-lg font-semibold text-red-700">Borrar topic</h2>
+          <p class="text-sm">Esta acción es <strong>irreversible</strong>. Para confirmar, escribe el nombre exacto del topic:</p>
+          <p class="font-mono text-sm bg-slate-100 p-2 rounded" x-text="topic ? topic.name : ''"></p>
+          <input x-model="deleteConfirmText" type="text" class="w-full border rounded px-2 py-1 font-mono text-sm" placeholder="Nombre exacto…" />
+          <div class="flex gap-2 justify-end">
+            <button @click="deleting=false" class="px-3 py-1.5 rounded border">Cancelar</button>
+            <button @click="submitDelete()" :disabled="submitting || deleteConfirmText !== (topic && topic.name)"
+                    class="px-3 py-1.5 rounded bg-red-600 text-white disabled:opacity-30">
+              <span x-text="submitting ? 'Borrando…' : 'Borrar definitivamente'"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="bg-slate-100 text-slate-500 text-xs py-3 text-center border-t">
+    Kafka Dashboard · LG Labs · sub-stack del BackOffice
+  </footer>
+
+  <!-- ============== Alpine components ============== -->
+  <script>
+    function appShell() {
+      return {
+        route: kd.parseHash(),
+        health: { status: "unknown" },
+        user: { user: null, role: null, groups: [], is_writer: false, is_admin: false, is_reader: false },
+        owners: [],
+
+        async init() {
+          window.addEventListener("hashchange", () => { this.route = kd.parseHash(); });
+          // Health (public, no auth)
+          this.refreshHealth();
+          setInterval(() => this.refreshHealth(), 30_000);
+          // Identity (whoami) — best-effort
+          try {
+            const w = await kd.call("GET", "/whoami");
+            this.user.user = w.user;
+            const groups = (w.groups || "").split(",").map(s => s.trim()).filter(Boolean);
+            this.user.groups = groups;
+            this.user.is_admin  = groups.includes("admin");
+            this.user.is_writer = groups.some(g => g==="admin" || g==="operator");
+            this.user.is_reader = groups.some(g => ["admin","operator","support","viewer"].includes(g));
+            this.user.role = this.user.is_admin ? "admin" : (groups[0] || null);
+          } catch (e) {
+            console.warn("whoami failed:", e);
+          }
+          // Owners (used by create/edit modals; share via parent scope)
+          try {
+            const r = await kd.call("GET", "/_owners");
+            this.owners = r.items || [];
+          } catch (e) {
+            console.warn("owners failed:", e);
+          }
+        },
+        async refreshHealth() {
+          try {
+            this.health = await kd.call("GET", "/health");
+          } catch (e) {
+            this.health = { status: "degraded", kafka: "unknown" };
+          }
+        },
+      };
+    }
+
+    function homeView() {
+      return {
+        loading: true,
+        summary: null,
+        async load() {
+          this.loading = true;
+          try {
+            this.summary = await kd.call("GET", "/summary");
+          } catch (e) {
+            kd.toast("error", e.message);
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+
+    function topicsView() {
+      return {
+        loading: true,
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 50,
+        search: "",
+        includeInternal: false,
+        creating: false,
+        submitting: false,
+        form: blankCreateForm(),
+
+        async load() {
+          this.loading = true;
+          try {
+            const params = new URLSearchParams({
+              include_internal: this.includeInternal,
+              search: this.search,
+              page: this.page,
+              page_size: this.pageSize,
+            });
+            const r = await kd.call("GET", `/topics?${params}`);
+            this.items = r.items || [];
+            this.total = r.total || 0;
+          } catch (e) {
+            kd.toast("error", e.message);
+          } finally {
+            this.loading = false;
+          }
+        },
+        openCreate() {
+          this.form = blankCreateForm();
+          this.creating = true;
+        },
+        async submitCreate() {
+          this.submitting = true;
+          try {
+            await kd.call("POST", "/topics", { body: this.form });
+            kd.toast("success", `Topic ${this.form.name} creado`);
+            this.creating = false;
+            this.load();
+          } catch (e) {
+            kd.toast("error", e.message);
+          } finally {
+            this.submitting = false;
+          }
+        },
+      };
+    }
+
+    function blankCreateForm() {
+      return {
+        name: "lglabs.",
+        partitions: 3,
+        replication_factor: 3,
+        min_insync_replicas: 2,
+        cleanup_policy: "delete",
+        retention_ms: 604_800_000,    // 7 days
+        owner: "",
+        description: "",
+      };
+    }
+
+    function topicDetailView() {
+      return {
+        loading: true,
+        error: null,
+        topic: null,
+        editing: false,
+        deleting: false,
+        submitting: false,
+        deleteConfirmText: "",
+        editForm: {},
+
+        async load(name) {
+          this.loading = true;
+          this.error = null;
+          this.topic = null;
+          try {
+            this.topic = await kd.call("GET", `/topics/${encodeURIComponent(name)}`);
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+        resetEditForm() {
+          this.editForm = {
+            partitions: this.topic.partitions,
+            cleanup_policy: "",
+            retention_ms: this.topic.retention_ms || null,
+            min_insync_replicas: this.topic.min_insync_replicas || null,
+            owner: "",
+            description: "",
+          };
+        },
+        async submitEdit() {
+          // Build payload with only non-empty fields
+          const body = {};
+          if (this.editForm.partitions && this.editForm.partitions !== this.topic.partitions) body.partitions = this.editForm.partitions;
+          if (this.editForm.cleanup_policy) body.cleanup_policy = this.editForm.cleanup_policy;
+          if (this.editForm.retention_ms && this.editForm.retention_ms !== this.topic.retention_ms) body.retention_ms = this.editForm.retention_ms;
+          if (this.editForm.min_insync_replicas && this.editForm.min_insync_replicas !== this.topic.min_insync_replicas) body.min_insync_replicas = this.editForm.min_insync_replicas;
+          if (this.editForm.owner) body.owner = this.editForm.owner;
+          if (this.editForm.description && this.editForm.description.trim().length >= 10) body.description = this.editForm.description.trim();
+
+          if (Object.keys(body).length === 0) {
+            kd.toast("info", "No hay cambios");
+            return;
+          }
+          this.submitting = true;
+          try {
+            this.topic = await kd.call("PATCH", `/topics/${encodeURIComponent(this.topic.name)}`, { body });
+            kd.toast("success", "Topic actualizado");
+            this.editing = false;
+          } catch (e) {
+            kd.toast("error", e.message);
+          } finally {
+            this.submitting = false;
+          }
+        },
+        async submitDelete() {
+          this.submitting = true;
+          try {
+            await kd.call("DELETE", `/topics/${encodeURIComponent(this.topic.name)}`, {
+              headers: { "X-Confirm-Resource": this.topic.name },
+            });
+            kd.toast("success", `Topic ${this.topic.name} borrado`);
+            // navigate back
+            setTimeout(() => kd.navigate("/topics"), 200);
+          } catch (e) {
+            kd.toast("error", e.message);
+          } finally {
+            this.submitting = false;
+            this.deleting = false;
+          }
+        },
+        async exportTopic() {
+          // Use raw fetch to download as file
+          try {
+            const resp = await kd.call("GET", `/topics/${encodeURIComponent(this.topic.name)}/export`, { raw: true });
+            if (!resp.ok) throw await resp.json();
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${this.topic.name}.json`;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+            kd.toast("success", "Export descargado");
+          } catch (e) {
+            kd.toast("error", kd.humanizeError(e, "Export falló"));
+          }
+        },
+      };
+    }
+  </script>
 </body>
 </html>

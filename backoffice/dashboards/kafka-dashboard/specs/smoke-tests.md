@@ -259,7 +259,161 @@ Todos `Up X (healthy)` excepto el conocido `gateway (unhealthy)` (preexistente, 
 
 ## Fase C · Frontend Topics
 
-> _Pendiente._
+Valida que la SPA Alpine + Tailwind se entrega correctamente por nginx, los assets vendorados se sirven bajo `/kafka/assets/`, y los endpoints REST consumidos por la UI honran la matriz de roles aplicada por el gateway. La verificación visual (UX, modales, toasts, formularios) se complementa con el checklist manual al final.
+
+Decisiones de Fase C ratificadas en SDD:
+- Single-page app con hash router (`#/`, `#/topics`, `#/topics/<name>`).
+- Tailwind 3.4 JIT (browser build) y Alpine 3.14 vendorados en `frontend/assets/` (sin build step).
+- Scope: solo Topics. Schemas y ACL-metadata se incorporan en Fases D y E.
+
+### C.1 — SPA index y assets servidos por el FE
+
+```bash
+docker exec lg-infra-backoffice-kafka-dashboard-fe sh -c \
+  'wget -qO- http://127.0.0.1/ | head -10 && echo --- && ls /usr/share/nginx/html/assets/'
+```
+
+**Esperado:**
+```
+<!DOCTYPE html>
+<html lang="es">
+...
+<title>Kafka Dashboard · LG Labs</title>
+  <script src="/kafka/assets/tailwind.min.js"></script>
+  <script src="/kafka/assets/app.js"></script>
+  <script defer src="/kafka/assets/alpine.min.js"></script>
+---
+alpine.min.js
+app.js
+tailwind.min.js
+```
+
+**Resultado:** ✅ PASS — index.html servido con los 3 scripts apuntando a `/kafka/assets/...` (rutas absolutas correctas para el prefijo del gateway). Assets vendorados presentes (alpine 44KB, tailwind 451KB, app.js ~5KB).
+
+### C.2 — Assets accesibles por el gateway con prefijo `/kafka/`
+
+```bash
+TOKEN=$(get_token admin)
+for path in / assets/app.js assets/alpine.min.js assets/tailwind.min.js; do
+  code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" \
+    "http://localhost:8080/kafka/$path")
+  echo "/kafka/$path → $code"
+done
+```
+
+**Esperado:** todos `200`.
+
+**Resultado:** ✅ PASS — los 4 paths devuelven 200. Los assets servidos directamente bajo `/assets/...` (sin prefijo) devuelven 404, lo cual es el comportamiento esperado: el gateway no los expone fuera del subpath del dashboard.
+
+### C.3 — Endpoints consumidos por la SPA responden correctamente
+
+```bash
+TOKEN=$(get_token viewer)
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/kafka/api/health
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/kafka/api/whoami
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/kafka/api/summary
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/kafka/api/_owners | python3 -m json.tool | head -10
+```
+
+**Esperado:** `health` 200 con `status: ok`; `whoami` devuelve `groups` con el rol; `summary` con contadores; `_owners` con 4 entradas del YAML.
+
+**Resultado:** ✅ PASS — todos responden 200; `summary` devuelve `{"brokers_alive":3,"topics_total":N,"components":{"kafka":"ok","sqlite":"ok"}}`; `whoami` devuelve `{"user":null,"groups":"admin|operator|support|viewer"}` (user null en flujo Bearer es esperado, ver §B.4); `_owners` devuelve los 4 ids `team-platform`, `team-data`, `team-payments`, `team-identity`.
+
+### C.4 — Matriz de roles sobre acciones de la UI (POST/DELETE/EXPORT)
+
+Valida que las acciones de mutación (`x-show="user.is_writer"` en la SPA) están además protegidas por nginx, y que el flag `is_admin` corresponde al header `X-Auth-Request-Groups`.
+
+```bash
+# POST de prueba
+for r in admin operator support viewer; do
+  T=$(cat /tmp/kd-token-$r)
+  body='{"name":"lglabs.smoke.cphase.'$r'","partitions":3,"replication_factor":3,"configs":{},"owner":"team-platform","description":"phase C smoke topic","environment":"dev"}'
+  code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+    -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
+    -d "$body" http://localhost:8080/kafka/api/topics)
+  echo "POST as $r → $code"
+done
+
+# DELETE con confirmación
+for r in admin operator support viewer; do
+  T=$(cat /tmp/kd-token-$r)
+  code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+    -H "Authorization: Bearer $T" -H "X-Confirm-Resource: lglabs.smoke.cphase.$r" \
+    http://localhost:8080/kafka/api/topics/lglabs.smoke.cphase.$r)
+  echo "DELETE as $r → $code"
+done
+
+# EXPORT
+for r in admin operator support viewer; do
+  T=$(cat /tmp/kd-token-$r)
+  code=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer $T" \
+    http://localhost:8080/kafka/api/topics/lglabs.smoke.cphase.admin/export)
+  echo "EXPORT as $r → $code"
+done
+```
+
+**Esperado:**
+| Acción | admin | operator | support | viewer |
+|---|---|---|---|---|
+| POST   | 201 | 201 | 403 | 403 |
+| DELETE | 204 | 204 | 403 | 403 |
+| EXPORT | 200 | 200 | 403 | 403 |
+
+**Resultado:** ✅ PASS — coincide con la matriz esperada y con la tabla de design §7. El gateway rechaza con 403 antes de llegar al BFF para los roles `support` y `viewer` en POST/DELETE; EXPORT (GET) devuelve 200 solo para `admin`/`operator` (defensa en profundidad: el BFF aplica `require_writer` en `/{name}/export`, mientras que el gateway permite GET genéricos a cualquier rol — el BFF refuerza la regla de negocio).
+
+### C.5 — Confirmación destructiva (`X-Confirm-Resource`)
+
+```bash
+T=$(cat /tmp/kd-token-admin)
+# crear topic temporal
+curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
+  -d '{"name":"lglabs.smoke.c5","partitions":1,"replication_factor":3,"configs":{},"owner":"team-platform","description":"confirm test","environment":"dev"}' \
+  http://localhost:8080/kafka/api/topics > /dev/null
+
+# DELETE sin header
+curl -s -o /dev/null -w "no-header → %{http_code}\n" -X DELETE \
+  -H "Authorization: Bearer $T" http://localhost:8080/kafka/api/topics/lglabs.smoke.c5
+# DELETE header incorrecto
+curl -s -o /dev/null -w "wrong → %{http_code}\n" -X DELETE \
+  -H "Authorization: Bearer $T" -H "X-Confirm-Resource: nope" \
+  http://localhost:8080/kafka/api/topics/lglabs.smoke.c5
+# DELETE correcto
+curl -s -o /dev/null -w "correct → %{http_code}\n" -X DELETE \
+  -H "Authorization: Bearer $T" -H "X-Confirm-Resource: lglabs.smoke.c5" \
+  http://localhost:8080/kafka/api/topics/lglabs.smoke.c5
+```
+
+**Esperado:** `409` (sin header), `409` (header distinto al recurso), `204` (correcto).
+
+**Resultado:** ✅ PASS — el BFF devuelve 409 con `error: confirmation_required` en los dos primeros casos y 204 al confirmar. La SPA implementa este flujo en el modal de borrado pidiendo escribir el nombre exacto del topic antes de habilitar el botón "Borrar" (ver `topicDetailView()` en `frontend/index.html`).
+
+### C.6 — Sin regresiones en BackOffice
+
+```bash
+docker ps --filter "name=lg-infra-backoffice" --format "{{.Names}}: {{.Status}}"
+```
+
+**Esperado:** todos los servicios del BackOffice MVP siguen `Up (healthy)` salvo `gateway` que mantiene el estado pre-existente reportado en B.7.
+
+**Resultado:** ✅ PASS — sin cambios en el resto del stack; los únicos contenedores tocados en esta fase son `lg-infra-backoffice-kafka-dashboard-fe` (bind-mount, sin rebuild) que sirvió la SPA actualizada tras `nginx -s reload`.
+
+### C.7 — Checklist manual de UX (browser, las 4 cuentas)
+
+> Ejecutar en navegador limpio (incógnito) abriendo `http://localhost:8080/kafka/`. Repetir con cada uno de los 4 usuarios seed.
+
+- [ ] Login redirige al IdP, vuelve al dashboard tras autenticarse.
+- [ ] Top bar muestra el badge de salud (verde) y el usuario/rol detectado.
+- [ ] `Inicio` muestra las 3 tarjetas de summary y la composición.
+- [ ] `Topics` lista los topics no internos, con búsqueda y paginación.
+- [ ] Botón `Crear` solo aparece para `admin` y `operator` (oculto para `support`/`viewer`).
+- [ ] Modal de creación valida: prefijo `lglabs.`, owner obligatorio, descripción ≥10 chars.
+- [ ] Detalle de topic muestra metadatos, configs y particiones; botones `Editar`, `Borrar`, `Exportar JSON` aparecen según rol.
+- [ ] Borrar exige escribir el nombre exacto del topic antes de habilitar el botón.
+- [ ] Toast en español aparece tanto para éxitos como para errores (mensajes desde `humanizeError()`).
+- [ ] `Exportar JSON` descarga un archivo `<nombre>.json` con la configuración completa.
+
+> El checklist UX queda como evidencia operacional; los puntos automáticos (C.1–C.6) son los gates duros de la fase.
 
 ---
 

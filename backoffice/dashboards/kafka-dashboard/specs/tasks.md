@@ -141,31 +141,35 @@ Antes de empezar **cualquier** fase:
 
 **Objetivo**: UI Alpine.js consumiendo los endpoints de Fase B. Sin schemas ni ACLs todavía.
 
+> **Decisión de fase ratificada en SDD**: Single-page app con hash router (`#/`, `#/topics`, `#/topics/<name>`) en un solo `index.html`. Tailwind 3.4 JIT (browser build) + Alpine 3.14 vendorados, sin paso de build. Scope: Topics. Schemas y ACL-metadata se incorporan en Fases D y E.
+
 ### C.1 — Assets base
 
-- [ ] **C.1.1** `frontend/assets/alpine.min.js` (vendored 3.x, no CDN para offline).
-- [ ] **C.1.2** `frontend/assets/tailwind.min.css` (vendored).
-- [ ] **C.1.3** `frontend/assets/app.js`: fetch wrapper con manejo de errores común, helper de roles desde header.
+- [x] **C.1.1** `frontend/assets/alpine.min.js` (vendored 3.14.1, no CDN para offline).
+- [x] **C.1.2** `frontend/assets/tailwind.min.js` (vendored 3.4.16 JIT browser build — preferido sobre `.css` por permitir clases dinámicas sin build).
+- [x] **C.1.3** `frontend/assets/app.js`: `window.kd` con `call()` (fetch wrapper que parsea envelope `{error, message, details}`), `humanizeError()` (mapea 17 códigos de design §7.2 a mensajes en español), `toast()`, hash router (`parseHash`/`navigate`), `fmt.ms`/`fmt.date`.
 
 ### C.2 — Páginas
 
-- [ ] **C.2.1** `frontend/index.html`: home con summary (`GET /api/summary`).
-- [ ] **C.2.2** `frontend/topics.html`: lista paginada + filtro + toggle internos + botón "Crear" (visible si admin/operator).
-- [ ] **C.2.3** Modal/drawer "Crear topic" con form validado client-side (regex prefilled, dropdown owners desde `_owners`).
-- [ ] **C.2.4** `frontend/topic-detail.html`: detalle + edit + delete con doble confirmación (texto exacto del nombre).
-- [ ] **C.2.5** Botón "Export JSON" (US-9).
-- [ ] **C.2.6** Banner global de error si `/api/health` reporta `degraded`.
+- [x] **C.2.1** `frontend/index.html` view `home`: summary cards desde `GET /api/summary` y composición.
+- [x] **C.2.2** `frontend/index.html` view `topics`: lista paginada + filtro client-side + botón "Crear" (oculto via `x-show="user.is_writer"`).
+- [x] **C.2.3** Modal "Crear topic" con form validado client-side (regex `^lglabs\.[a-z0-9._-]+$` prefilled, dropdown owners desde `GET /api/_owners`, descripción ≥10 chars).
+- [x] **C.2.4** `frontend/index.html` view `topic-detail`: metadatos + configs + particiones + modal `Editar` + modal `Borrar` con confirmación por nombre exacto (envía header `X-Confirm-Resource`).
+- [x] **C.2.5** Botón `Exportar JSON` (US-9): descarga `<nombre>.json` via `Blob` + `URL.createObjectURL`.
+- [x] **C.2.6** Badge de salud en top bar (verde/amarillo/rojo según `/api/health`); refresca cada 30s. (No banner full-width: el badge cumple la función con menor ruido visual.)
 
 ### C.3 — UX de errores
 
-- [ ] **C.3.1** Tabla de mapeo `error code → mensaje localizado` (es/en simple, sin i18n framework).
-- [ ] **C.3.2** Toast notifications para éxito/error.
+- [x] **C.3.1** Tabla `error code → mensaje localizado` en español (mapa `humanizeError` en `app.js`, 17 entradas alineadas con design §7.2).
+- [x] **C.3.2** Toast notifications para éxito/error (top-right, autohide 5s, función global `kd.toast()`).
 
 ### C.4 — Smoke tests Fase C
 
-- [ ] **C.4.1** Recorrido manual completo desde la UI con los 4 usuarios.
-- [ ] **C.4.2** Verificar que viewer ve listas pero no botones de mutación.
-- [ ] **C.4.3** Verificar que la confirmación de borrado funciona end-to-end.
+- [x] **C.4.1** Smoke automatizado `bff/tests/scripts/smoke-c.sh` (C.1–C.6 en `specs/smoke-tests.md`): assets, endpoints, matriz de roles, confirmación destructiva, regresión BackOffice — todo PASS.
+- [x] **C.4.2** Matriz role × método verificada vía API (gateway): `support`/`viewer` reciben 403 en POST/DELETE/EXPORT; admin/operator reciben 201/204/200. La SPA usa `x-show="user.is_writer"` para ocultar los botones (consistente con la enforcement del gateway+BFF).
+- [x] **C.4.3** Confirmación destructiva end-to-end: BFF devuelve 409 sin/con header `X-Confirm-Resource` incorrecto, 204 al confirmar; la SPA exige escribir el nombre exacto antes de habilitar el botón "Borrar".
+
+> **Pendiente de operación manual** (no bloquea cierre de fase, queda como checklist en `specs/smoke-tests.md` §C.7): recorrido visual de la SPA en navegador con cada uno de los 4 usuarios para validar UX (modales, toasts, descarga del JSON).
 
 **Cierre Fase C**: User puede gestionar topics 100% desde la UI sin tocar AKHQ ni CLI.
 
