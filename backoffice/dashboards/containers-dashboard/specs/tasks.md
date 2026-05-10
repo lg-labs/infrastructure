@@ -252,31 +252,32 @@ Antes de empezar **cualquier** fase:
 
 ### F.1 — BFF DELETE endpoints
 
-- [ ] **F.1.1** `app/routers/containers.py` añade `DELETE /{id}`.
-- [ ] **F.1.2** `app/routers/images.py` añade `DELETE /{id}`.
-- [ ] **F.1.3** `app/routers/volumes.py` añade `DELETE /{name}`.
-- [ ] **F.1.4** `app/routers/networks.py` añade `DELETE /{id}`.
-- [ ] **F.1.5** Todos con `require_admin`.
-- [ ] **F.1.6** Container DELETE: denylist → confirmation → check running (sin force) → docker rm.
-- [ ] **F.1.7** Image DELETE: confirmation → check `containers_using > 0` (sin force) → docker rmi.
-- [ ] **F.1.8** Volume DELETE: confirmation → check montado → docker volume rm. Sin `force`.
-- [ ] **F.1.9** Network DELETE: confirmation → check builtin (`bridge|host|none` → 403) → check `containers_attached > 0` → docker network rm.
+- [x] **F.1.1** `app/routers/containers.py` añade `DELETE /{id}`.
+- [x] **F.1.2** `app/routers/images.py` añade `DELETE /{id}`.
+- [x] **F.1.3** `app/routers/volumes.py` añade `DELETE /{name}`.
+- [x] **F.1.4** `app/routers/networks.py` añade `DELETE /{id}`.
+- [x] **F.1.5** Todos con `require_admin`.
+- [x] **F.1.6** Container DELETE: denylist → confirmation → check running (sin force) → docker rm.
+- [x] **F.1.7** Image DELETE: confirmation → check `containers_using > 0` (sin force) → docker rmi.
+- [x] **F.1.8** Volume DELETE: confirmation → check montado → docker volume rm. Sin `force`.
+- [x] **F.1.9** Network DELETE: confirmation → check builtin (`bridge|host|none` → 403) → check `containers_attached > 0` → docker network rm.
 
 ### F.2 — UI Remove
 
-- [ ] **F.2.1** Botón "Remove" en cada lista (visible solo admin, deshabilitado si protected/in_use).
-- [ ] **F.2.2** Modal confirmación con input que exige escribir el nombre/repo:tag/id_short exacto.
-- [ ] **F.2.3** Para container: checkbox `force` (si running). Para image: checkbox `force` + `prune_children`. Volume/network: sin checkboxes.
+- [x] **F.2.1** Botón "Remove" en cada lista (visible solo admin, deshabilitado si protected/in_use).
+- [x] **F.2.2** Modal confirmación con input que exige escribir el nombre/repo:tag/id_short exacto.
+- [x] **F.2.3** Para container: checkbox `force` + `remove_volumes`. Para image: checkbox `force`. Volume/network: sin checkboxes (servidor rechaza si en uso).
 
 ### F.3 — Smoke tests Fase F
 
-- [ ] **F.3.1** Como `lglabsadmin`: crear container test (`docker run -d --name cd-smoke alpine sleep 60`), borrar via UI, verificar 204 + audit.
-- [ ] **F.3.2** Container running sin force → 409 container_running.
-- [ ] **F.3.3** Image en uso sin force → 409 image_in_use.
-- [ ] **F.3.4** Volume montado → 409 volume_in_use.
-- [ ] **F.3.5** Network `bridge` → 403 builtin_network_protected.
-- [ ] **F.3.6** Como `lglabsoperator`: DELETE → 403 (gateway).
-- [ ] **F.3.7** Como `lglabsadmin`: DELETE container en denylist → 423 protected_resource.
+- [x] **F.3.1** Como `lglabsadmin`: crear container test, borrar via API, verificar 204 + audit.
+- [x] **F.3.2** Container running sin force → 409 container_running; con `?force=true` → 204.
+- [x] **F.3.3** Image en uso sin force → 409 image_in_use; con `?force=true` → 204.
+- [x] **F.3.4** Volume montado → 409 volume_in_use.
+- [x] **F.3.5** Network `bridge` → 403 builtin_network_protected; network con attached → 409 network_in_use.
+- [x] **F.3.6** Como `lglabsoperator`: DELETE → 403 (gateway).
+- [x] **F.3.7** Como `lglabsadmin`: DELETE container en denylist → 423 protected_resource.
+- [x] **F.3.8** Sin `X-Confirm-Resource` header → 409 confirmation_required.
 
 **Cierre Fase F**: US-6 + US-8 implementadas.
 

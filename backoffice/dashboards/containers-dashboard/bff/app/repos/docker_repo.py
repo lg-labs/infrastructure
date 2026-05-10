@@ -20,11 +20,16 @@ from requests.exceptions import ConnectionError as ReqConnError, ReadTimeout
 from ..errors import (
     AlreadyRunning,
     AlreadyStopped,
+    BuiltinNetworkProtected,
     ContainerNotFound,
+    ContainerRunning,
     DockerUnavailable,
+    ImageInUse,
     ImageNotFound,
+    NetworkInUse,
     NetworkNotFound,
     ProtectedResource,
+    VolumeInUse,
     VolumeNotFound,
 )
 from ..models.domain import (
@@ -344,6 +349,109 @@ class DockerRepo:
             raise DockerUnavailable(f"docker restart failed: {e}") from e
         c.reload()
         return {"name": name, "id": c.id, "state": (c.attrs.get("State") or {}).get("Status")}
+
+    # ---------- DELETE (Phase F) ----------
+
+    def delete_container(self, ref: str, *, force: bool = False, remove_volumes: bool = False) -> str:
+        c = self._get_container_or_404(ref)
+        name = _normalize_name(c)
+        if is_protected(name):
+            raise ProtectedResource(name)
+        c.reload()
+        state = (c.attrs.get("State") or {}).get("Status") or c.status
+        if state == "running" and not force:
+            raise ContainerRunning(name)
+        try:
+            c.remove(force=force, v=remove_volumes)
+        except APIError as e:
+            raise DockerUnavailable(f"docker rm failed: {e}") from e
+        return name
+
+    def delete_image(self, ref: str, *, force: bool = False, noprune: bool = False) -> str:
+        try:
+            img = self.client.images.get(ref)
+        except DockerImageNotFound as e:
+            raise ImageNotFound(ref) from e
+        except (ReqConnError, ReadTimeout) as e:
+            raise DockerUnavailable(str(e)) from e
+
+        # Find containers using this image (any state). If any and !force -> 409.
+        used_by: list[str] = []
+        try:
+            for c in self.client.containers.list(all=True):
+                if (c.image and c.image.id == img.id) or (img.id in (c.attrs.get("Image") or "")):
+                    used_by.append(_normalize_name(c))
+        except Exception:  # pragma: no cover
+            pass
+        if used_by and not force:
+            raise ImageInUse(ref, used_by=used_by)
+
+        try:
+            self.client.images.remove(image=img.id, force=force, noprune=noprune)
+        except APIError as e:
+            raise DockerUnavailable(f"docker rmi failed: {e}") from e
+        return img.id
+
+    def delete_volume(self, name: str) -> str:
+        try:
+            v = self.client.volumes.get(name)
+        except NotFound as e:
+            raise VolumeNotFound(name) from e
+        except (ReqConnError, ReadTimeout) as e:
+            raise DockerUnavailable(str(e)) from e
+
+        # Check usage. attrs.UsageData.RefCount is best-effort; otherwise scan containers.
+        in_use = False
+        try:
+            usage = (v.attrs.get("UsageData") or {})
+            ref_count = usage.get("RefCount")
+            if isinstance(ref_count, int) and ref_count > 0:
+                in_use = True
+            else:
+                for c in self.client.containers.list(all=True):
+                    mounts = c.attrs.get("Mounts") or []
+                    if any((m.get("Type") == "volume" and m.get("Name") == name) for m in mounts):
+                        in_use = True
+                        break
+        except Exception:  # pragma: no cover
+            pass
+        if in_use:
+            raise VolumeInUse(name)
+
+        try:
+            v.remove()
+        except APIError as e:
+            raise DockerUnavailable(f"docker volume rm failed: {e}") from e
+        return name
+
+    def delete_network(self, ref: str) -> str:
+        try:
+            n = self.client.networks.get(ref)
+        except NotFound as e:
+            raise NetworkNotFound(ref) from e
+        except (ReqConnError, ReadTimeout) as e:
+            raise DockerUnavailable(str(e)) from e
+
+        nname = n.name or ref
+        if nname in BUILTIN_NETWORKS:
+            raise BuiltinNetworkProtected(nname)
+
+        # Containers attached?
+        attached: list[str] = []
+        try:
+            n.reload()
+            cmap = (n.attrs.get("Containers") or {})
+            attached = [c.get("Name", "") for c in cmap.values() if c.get("Name")]
+        except Exception:  # pragma: no cover
+            pass
+        if attached:
+            raise NetworkInUse(nname, attached=attached)
+
+        try:
+            n.remove()
+        except APIError as e:
+            raise DockerUnavailable(f"docker network rm failed: {e}") from e
+        return nname
 
 
 # ---------- helpers ----------

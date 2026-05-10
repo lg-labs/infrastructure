@@ -159,6 +159,11 @@
                 <td class="px-3 py-2 text-slate-500 text-xs" x-text="c.compose_project || '—'"></td>
                 <td class="px-3 py-2 text-slate-500 text-xs" x-text="formatPorts(c.ports)"></td>
                 <td class="px-3 py-2 text-right">
+                  <button x-show="$store.app.canAdmin"
+                          @click="askDelete(c, $event)"
+                          :disabled="c.is_protected"
+                          class="text-red-600 hover:text-red-800 disabled:text-slate-300 disabled:cursor-not-allowed mr-2"
+                          :title="c.is_protected ? '🔒 protegido' : 'Borrar container'">🗑</button>
                   <a :href="`#/containers/${encodeURIComponent(c.id_short)}`" class="text-blue-600 hover:underline">→</a>
                 </td>
               </tr>
@@ -168,6 +173,40 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Remove confirmation modal (Phase F) -->
+      <div x-show="del.open" x-cloak
+           class="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4"
+           @keydown.escape.window="cancelDelete()">
+        <div class="bg-white rounded shadow-lg max-w-md w-full p-5 space-y-4">
+          <h2 class="text-lg font-semibold text-red-700">Borrar container</h2>
+          <p class="text-sm text-slate-700">
+            Para confirmar, escribe el nombre exacto:
+            <span class="block mt-2 font-mono text-xs bg-slate-100 px-2 py-1 rounded" x-text="del.name"></span>
+          </p>
+          <input x-model="del.typed" class="w-full border rounded px-2 py-1 font-mono text-sm" placeholder="nombre exacto">
+          <div class="space-y-1 text-sm">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" x-model="del.force">
+              <span>Force (borrar aunque esté corriendo)</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" x-model="del.removeVolumes">
+              <span>Remove anonymous volumes</span>
+            </label>
+          </div>
+          <div class="flex justify-end gap-2">
+            <button @click="cancelDelete()" class="px-3 py-1 rounded bg-slate-200 hover:bg-slate-300 text-sm">Cancelar</button>
+            <button @click="runDelete()"
+                    :disabled="del.busy || del.typed !== del.name"
+                    class="px-3 py-1 rounded bg-red-600 text-white text-sm"
+                    :style="(del.busy || del.typed !== del.name) ? 'opacity:.5;cursor:not-allowed' : ''">
+              <span x-show="!del.busy">Borrar</span>
+              <span x-show="del.busy">Borrando…</span>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -208,6 +247,12 @@
              :title="detail?.is_protected ? '🔒 protegido' : (detail?.state!=='running' ? 'No está corriendo' : 'Abrir shell exec')">
             ⌘ Exec
           </a>
+          <button x-show="$store.app.canAdmin" @click="askAction('remove')"
+                  :disabled="detail?.is_protected || actionBusy"
+                  class="text-sm px-3 py-1 rounded bg-red-600 text-white disabled:bg-slate-300 disabled:cursor-not-allowed"
+                  :title="detail?.is_protected ? '🔒 protegido' : 'Borrar container'">
+            🗑 Remove
+          </button>
         </div>
       </div>
 
@@ -220,6 +265,7 @@
             <span x-show="confirm.action==='start'">Iniciar container</span>
             <span x-show="confirm.action==='stop'">Parar container</span>
             <span x-show="confirm.action==='restart'">Reiniciar container</span>
+            <span x-show="confirm.action==='remove'" class="text-red-700">Borrar container</span>
           </h2>
           <p class="text-sm text-slate-700">
             <template x-if="confirm.action==='start'">
@@ -233,6 +279,17 @@
           </p>
           <input x-show="confirm.action!=='start'" x-model="confirm.typed"
                  class="w-full border rounded px-2 py-1 font-mono text-sm" placeholder="nombre exacto">
+          <!-- Remove options (Phase F) -->
+          <div x-show="confirm.action==='remove'" class="space-y-1 text-sm">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" x-model="confirm.force">
+              <span>Force (borrar aunque esté corriendo)</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" x-model="confirm.removeVolumes">
+              <span>Remove anonymous volumes</span>
+            </label>
+          </div>
           <div class="flex justify-end gap-2">
             <button @click="cancelAction()" class="px-3 py-1 rounded bg-slate-200 hover:bg-slate-300 text-sm">
               Cancelar
@@ -240,7 +297,7 @@
             <button @click="runAction()"
                     :disabled="actionBusy || (confirm.action!=='start' && confirm.typed!==confirm.name)"
                     class="px-3 py-1 rounded text-white text-sm"
-                    :class="confirm.action==='start' ? 'bg-green-600' : (confirm.action==='stop' ? 'bg-amber-600' : 'bg-blue-600')"
+                    :class="confirm.action==='start' ? 'bg-green-600' : (confirm.action==='stop' ? 'bg-amber-600' : (confirm.action==='remove' ? 'bg-red-600' : 'bg-blue-600'))"
                     :style="(actionBusy || (confirm.action!=='start' && confirm.typed!==confirm.name)) ? 'opacity:.5;cursor:not-allowed' : ''">
               <span x-show="!actionBusy">Confirmar</span>
               <span x-show="actionBusy">Ejecutando…</span>
@@ -465,6 +522,7 @@
               <th class="px-3 py-2 w-28">ID</th>
               <th class="px-3 py-2 w-24 text-right">Size</th>
               <th class="px-3 py-2 w-20 text-right">Used</th>
+              <th class="px-3 py-2 w-12"></th>
             </tr>
           </thead>
           <tbody>
@@ -475,11 +533,43 @@
                 <td class="px-3 py-2 font-mono text-xs text-slate-500" x-text="img.id_short"></td>
                 <td class="px-3 py-2 text-right" x-text="cd.fmt.mb(img.size_mb)"></td>
                 <td class="px-3 py-2 text-right" :class="img.containers_using > 0 ? 'text-emerald-700 font-medium' : 'text-slate-400'" x-text="img.containers_using"></td>
+                <td class="px-3 py-2 text-right">
+                  <button x-show="$store.app.canAdmin" @click="askDelete(img)"
+                          class="text-red-600 hover:text-red-800" title="Borrar imagen">🗑</button>
+                </td>
               </tr>
             </template>
-            <tr x-show="!loading && items.length===0"><td colspan="5" class="px-3 py-4 text-center text-slate-500">Sin imágenes</td></tr>
+            <tr x-show="!loading && items.length===0"><td colspan="6" class="px-3 py-4 text-center text-slate-500">Sin imágenes</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Remove confirmation modal (Phase F) -->
+      <div x-show="del.open" x-cloak
+           class="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4"
+           @keydown.escape.window="cancelDelete()">
+        <div class="bg-white rounded shadow-lg max-w-md w-full p-5 space-y-4">
+          <h2 class="text-lg font-semibold text-red-700">Borrar <span x-text="_delCfg.kindLabel"></span></h2>
+          <p class="text-sm text-slate-700">
+            Para confirmar, escribe el nombre exacto:
+            <span class="block mt-2 font-mono text-xs bg-slate-100 px-2 py-1 rounded break-all" x-text="del.name"></span>
+          </p>
+          <input x-model="del.typed" class="w-full border rounded px-2 py-1 font-mono text-sm" placeholder="nombre exacto">
+          <label x-show="_delCfg.supportsForce" class="flex items-center gap-2 text-sm">
+            <input type="checkbox" x-model="del.force">
+            <span x-text="_delCfg.forceLabel"></span>
+          </label>
+          <div class="flex justify-end gap-2">
+            <button @click="cancelDelete()" class="px-3 py-1 rounded bg-slate-200 hover:bg-slate-300 text-sm">Cancelar</button>
+            <button @click="runDelete()"
+                    :disabled="del.busy || del.typed !== del.name"
+                    class="px-3 py-1 rounded bg-red-600 text-white text-sm"
+                    :style="(del.busy || del.typed !== del.name) ? 'opacity:.5;cursor:not-allowed' : ''">
+              <span x-show="!del.busy">Borrar</span>
+              <span x-show="del.busy">Borrando…</span>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -500,6 +590,7 @@
               <th class="px-3 py-2 w-24">Driver</th>
               <th class="px-3 py-2">Mountpoint</th>
               <th class="px-3 py-2 w-20 text-right">Used</th>
+              <th class="px-3 py-2 w-12"></th>
             </tr>
           </thead>
           <tbody>
@@ -509,11 +600,45 @@
                 <td class="px-3 py-2 text-xs" x-text="v.driver"></td>
                 <td class="px-3 py-2 font-mono text-xs text-slate-500 break-all" x-text="v.mountpoint"></td>
                 <td class="px-3 py-2 text-right" :class="v.containers_using > 0 ? 'text-emerald-700 font-medium' : 'text-slate-400'" x-text="v.containers_using"></td>
+                <td class="px-3 py-2 text-right">
+                  <button x-show="$store.app.canAdmin" @click="askDelete(v)"
+                          :disabled="!canDelete(v)"
+                          class="text-red-600 hover:text-red-800 disabled:text-slate-300 disabled:cursor-not-allowed"
+                          :title="deleteTip(v)">🗑</button>
+                </td>
               </tr>
             </template>
-            <tr x-show="!loading && items.length===0"><td colspan="4" class="px-3 py-4 text-center text-slate-500">Sin volúmenes</td></tr>
+            <tr x-show="!loading && items.length===0"><td colspan="5" class="px-3 py-4 text-center text-slate-500">Sin volúmenes</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Remove confirmation modal (Phase F) -->
+      <div x-show="del.open" x-cloak
+           class="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4"
+           @keydown.escape.window="cancelDelete()">
+        <div class="bg-white rounded shadow-lg max-w-md w-full p-5 space-y-4">
+          <h2 class="text-lg font-semibold text-red-700">Borrar <span x-text="_delCfg.kindLabel"></span></h2>
+          <p class="text-sm text-slate-700">
+            Para confirmar, escribe el nombre exacto:
+            <span class="block mt-2 font-mono text-xs bg-slate-100 px-2 py-1 rounded break-all" x-text="del.name"></span>
+          </p>
+          <input x-model="del.typed" class="w-full border rounded px-2 py-1 font-mono text-sm" placeholder="nombre exacto">
+          <label x-show="_delCfg.supportsForce" class="flex items-center gap-2 text-sm">
+            <input type="checkbox" x-model="del.force">
+            <span x-text="_delCfg.forceLabel"></span>
+          </label>
+          <div class="flex justify-end gap-2">
+            <button @click="cancelDelete()" class="px-3 py-1 rounded bg-slate-200 hover:bg-slate-300 text-sm">Cancelar</button>
+            <button @click="runDelete()"
+                    :disabled="del.busy || del.typed !== del.name"
+                    class="px-3 py-1 rounded bg-red-600 text-white text-sm"
+                    :style="(del.busy || del.typed !== del.name) ? 'opacity:.5;cursor:not-allowed' : ''">
+              <span x-show="!del.busy">Borrar</span>
+              <span x-show="del.busy">Borrando…</span>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -535,7 +660,8 @@
               <th class="px-3 py-2 w-20">Scope</th>
               <th class="px-3 py-2 w-20 text-center">Internal</th>
               <th class="px-3 py-2 w-24 text-right">Containers</th>
-              <th class="px-3 py-2 w-20"></th>
+              <th class="px-3 py-2 w-20">ID</th>
+              <th class="px-3 py-2 w-12"></th>
             </tr>
           </thead>
           <tbody>
@@ -550,11 +676,45 @@
                 <td class="px-3 py-2 text-center text-xs" x-text="n.internal ? 'sí' : 'no'"></td>
                 <td class="px-3 py-2 text-right" :class="n.containers_attached > 0 ? 'text-emerald-700 font-medium' : 'text-slate-400'" x-text="n.containers_attached"></td>
                 <td class="px-3 py-2 font-mono text-xs text-slate-500" x-text="n.id_short"></td>
+                <td class="px-3 py-2 text-right">
+                  <button x-show="$store.app.canAdmin" @click="askDelete(n)"
+                          :disabled="!canDelete(n)"
+                          class="text-red-600 hover:text-red-800 disabled:text-slate-300 disabled:cursor-not-allowed"
+                          :title="deleteTip(n)">🗑</button>
+                </td>
               </tr>
             </template>
-            <tr x-show="!loading && items.length===0"><td colspan="6" class="px-3 py-4 text-center text-slate-500">Sin redes</td></tr>
+            <tr x-show="!loading && items.length===0"><td colspan="7" class="px-3 py-4 text-center text-slate-500">Sin redes</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Remove confirmation modal (Phase F) -->
+      <div x-show="del.open" x-cloak
+           class="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4"
+           @keydown.escape.window="cancelDelete()">
+        <div class="bg-white rounded shadow-lg max-w-md w-full p-5 space-y-4">
+          <h2 class="text-lg font-semibold text-red-700">Borrar <span x-text="_delCfg.kindLabel"></span></h2>
+          <p class="text-sm text-slate-700">
+            Para confirmar, escribe el nombre exacto:
+            <span class="block mt-2 font-mono text-xs bg-slate-100 px-2 py-1 rounded break-all" x-text="del.name"></span>
+          </p>
+          <input x-model="del.typed" class="w-full border rounded px-2 py-1 font-mono text-sm" placeholder="nombre exacto">
+          <label x-show="_delCfg.supportsForce" class="flex items-center gap-2 text-sm">
+            <input type="checkbox" x-model="del.force">
+            <span x-text="_delCfg.forceLabel"></span>
+          </label>
+          <div class="flex justify-end gap-2">
+            <button @click="cancelDelete()" class="px-3 py-1 rounded bg-slate-200 hover:bg-slate-300 text-sm">Cancelar</button>
+            <button @click="runDelete()"
+                    :disabled="del.busy || del.typed !== del.name"
+                    class="px-3 py-1 rounded bg-red-600 text-white text-sm"
+                    :style="(del.busy || del.typed !== del.name) ? 'opacity:.5;cursor:not-allowed' : ''">
+              <span x-show="!del.busy">Borrar</span>
+              <span x-show="del.busy">Borrando…</span>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -647,6 +807,8 @@
         total: 0,
         search: "",
         hideStopped: false,
+        // Remove (Phase F)
+        del: { open: false, name: "", typed: "", busy: false, force: false, removeVolumes: false, item: null },
         get visible() {
           let xs = this.all;
           if (this.hideStopped) xs = xs.filter(c => c.state === "running");
@@ -689,6 +851,33 @@
                  (ports.length > 3 ? ` +${ports.length - 3}` : "");
         },
         goDetail(c) { location.hash = `#/containers/${encodeURIComponent(c.id_short)}`; },
+        // ---- Remove (Phase F) ----
+        askDelete(c, ev) {
+          if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+          if (c.is_protected) { cd.toast("warn", "Container protegido por denylist."); return; }
+          this.del = { open: true, name: c.name, typed: "", busy: false, force: c.state === "running", removeVolumes: false, item: c };
+        },
+        cancelDelete() {
+          this.del = { open: false, name: "", typed: "", busy: false, force: false, removeVolumes: false, item: null };
+        },
+        async runDelete() {
+          if (!this.del.item || this.del.typed !== this.del.name) return;
+          this.del.busy = true;
+          try {
+            const qs = [];
+            if (this.del.force) qs.push("force=true");
+            if (this.del.removeVolumes) qs.push("remove_volumes=true");
+            const url = `/containers/${encodeURIComponent(this.del.name)}${qs.length ? "?" + qs.join("&") : ""}`;
+            await cd.call("DELETE", url, { headers: { "X-Confirm-Resource": this.del.name } });
+            cd.toast("success", `Container borrado: ${this.del.name}`);
+            this.cancelDelete();
+            await this.load();
+          } catch (e) {
+            cd.toast("error", e.message);
+          } finally {
+            this.del.busy = false;
+          }
+        },
       };
     }
 
@@ -707,9 +896,9 @@
         statsEs: null,
         // Inspect
         inspectJson: "",
-        // Actions (Phase D)
+        // Actions (Phase D + F)
         actionBusy: false,
-        confirm: { open: false, action: "", name: "", typed: "" },
+        confirm: { open: false, action: "", name: "", typed: "", force: false, removeVolumes: false },
         get route() { return cd.parseHash(); },
         tabs: [
           { id: "overview", label: "Overview" },
@@ -752,17 +941,17 @@
         stateClass(s) {
           return containersView().stateClass(s);
         },
-        // ---- Actions (Phase D) ----
+        // ---- Actions (Phase D + F) ----
         askAction(action) {
           if (!this.detail) return;
           if (this.detail.is_protected) {
             cd.toast("warn", "Container protegido por denylist — no se puede modificar.");
             return;
           }
-          this.confirm = { open: true, action, name: this.detail.name, typed: "" };
+          this.confirm = { open: true, action, name: this.detail.name, typed: "", force: false, removeVolumes: false };
         },
         cancelAction() {
-          this.confirm = { open: false, action: "", name: "", typed: "" };
+          this.confirm = { open: false, action: "", name: "", typed: "", force: false, removeVolumes: false };
         },
         async runAction() {
           const { action, name } = this.confirm;
@@ -771,6 +960,17 @@
           this.actionBusy = true;
           try {
             const headers = action === "start" ? {} : { "X-Confirm-Resource": name };
+            if (action === "remove") {
+              const qs = [];
+              if (this.confirm.force) qs.push("force=true");
+              if (this.confirm.removeVolumes) qs.push("remove_volumes=true");
+              const url = `/containers/${encodeURIComponent(this.route.id)}${qs.length ? "?" + qs.join("&") : ""}`;
+              await cd.call("DELETE", url, { headers });
+              cd.toast("success", `Container borrado: ${name}`);
+              this.cancelAction();
+              location.hash = "#/containers";
+              return;
+            }
             await cd.call("POST", `/containers/${encodeURIComponent(this.route.id)}/${action}`, { headers });
             cd.toast("success", `Container ${action === "start" ? "iniciado" : action === "stop" ? "parado" : "reiniciado"}: ${name}`);
             this.cancelAction();
@@ -847,11 +1047,24 @@
     }
 
     // ----- Images / Volumes / Networks -----
-    function _listView(path) {
+    function _listView(path, opts) {
+      const cfg = Object.assign({
+        nameKey: "name",          // field used as confirmation name + endpoint suffix
+        endpointBase: path,        // DELETE goes to `${endpointBase}/${name}`
+        deletable: () => true,     // (item) => bool
+        deleteDisabledReason: () => null,  // (item) => string|null tooltip
+        supportsForce: false,      // expose ?force=true checkbox
+        forceLabel: "Force",
+        kindLabel: "elemento",     // shown in modal heading
+      }, opts || {});
+
       return {
         loading: true,
         items: [],
         total: 0,
+        // Delete confirm state
+        del: { open: false, name: "", typed: "", busy: false, force: false, item: null },
+        _delCfg: cfg,
         async load() {
           this.loading = true;
           try {
@@ -864,11 +1077,77 @@
             this.loading = false;
           }
         },
+        canDelete(item) { return cfg.deletable(item); },
+        deleteTip(item) { return cfg.deleteDisabledReason(item) || "Borrar"; },
+        askDelete(item) {
+          if (!cfg.deletable(item)) {
+            const reason = cfg.deleteDisabledReason(item);
+            if (reason) cd.toast("warn", reason);
+            return;
+          }
+          this.del = { open: true, name: item[cfg.nameKey], typed: "", busy: false, force: false, item };
+        },
+        cancelDelete() {
+          this.del = { open: false, name: "", typed: "", busy: false, force: false, item: null };
+        },
+        async runDelete() {
+          if (!this.del.item || this.del.typed !== this.del.name) return;
+          this.del.busy = true;
+          try {
+            const qs = (cfg.supportsForce && this.del.force) ? "?force=true" : "";
+            const url = `${cfg.endpointBase}/${encodeURIComponent(this.del.name)}${qs}`;
+            await cd.call("DELETE", url, { headers: { "X-Confirm-Resource": this.del.name } });
+            cd.toast("success", `Borrado: ${this.del.name}`);
+            this.cancelDelete();
+            await this.load();
+          } catch (e) {
+            cd.toast("error", e.message);
+          } finally {
+            this.del.busy = false;
+          }
+        },
       };
     }
-    function imagesView()   { return _listView("/images");   }
-    function volumesView()  { return _listView("/volumes");  }
-    function networksView() { return _listView("/networks"); }
+    function imagesView()   {
+      // Images use repo:tag (or id_short fallback) as the confirmation name.
+      // 'name' field doesn't exist in ImageSummary; we synthesize one client-side.
+      const v = _listView("/images", {
+        nameKey: "_confirm_name",
+        endpointBase: "/images",
+        deletable: (img) => true,  // server enforces image_in_use
+        supportsForce: true,
+        forceLabel: "Force (borrar aunque esté en uso)",
+        kindLabel: "imagen",
+      });
+      const origLoad = v.load.bind(v);
+      v.load = async function () {
+        await origLoad();
+        // synthesize a stable confirmation token: repo:tag or id_short
+        for (const img of this.items) {
+          if (img.repository && img.tag && img.repository !== "<none>") img._confirm_name = `${img.repository}:${img.tag}`;
+          else                                                            img._confirm_name = img.id_short;
+        }
+      };
+      return v;
+    }
+    function volumesView()  {
+      return _listView("/volumes", {
+        nameKey: "name",
+        endpointBase: "/volumes",
+        deletable: (v) => v.containers_using === 0,
+        deleteDisabledReason: (v) => v.containers_using > 0 ? "Volumen montado por uno o más containers." : null,
+        kindLabel: "volumen",
+      });
+    }
+    function networksView() {
+      return _listView("/networks", {
+        nameKey: "name",
+        endpointBase: "/networks",
+        deletable: (n) => !n.is_builtin && n.containers_attached === 0,
+        deleteDisabledReason: (n) => n.is_builtin ? "Red built-in (no se puede borrar)." : (n.containers_attached > 0 ? "Tiene containers conectados." : null),
+        kindLabel: "red",
+      });
+    }
 
     // ----- Container exec (Phase E) -----
     function containerExecView() {

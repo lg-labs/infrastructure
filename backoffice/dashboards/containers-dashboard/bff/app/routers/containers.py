@@ -10,10 +10,10 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
-from ..deps import require_reader, require_writer
+from ..deps import require_reader, require_writer, require_admin
 from ..errors import DockerUnavailable
 from ..models.domain import ContainerDetail, ContainersPage, LogsResponse
 from ..repos.docker_repo import get_docker_repo
@@ -256,3 +256,23 @@ def restart_container(
     name = _resolve_name(ref)
     assert_confirm_resource(request, name)
     return get_docker_repo().restart_container(ref, timeout_seconds=timeout_seconds)
+
+
+# ---------- DELETE (Phase F) — admin only ----------
+
+
+@router.delete(
+    "/{ref}",
+    status_code=204,
+    dependencies=[Depends(require_admin)],
+)
+def delete_container(
+    ref: str,
+    request: Request,
+    force: bool = Query(False),
+    remove_volumes: bool = Query(False),
+) -> Response:
+    name = _resolve_name(ref)
+    assert_confirm_resource(request, name)
+    get_docker_repo().delete_container(ref, force=force, remove_volumes=remove_volumes)
+    return Response(status_code=204)
