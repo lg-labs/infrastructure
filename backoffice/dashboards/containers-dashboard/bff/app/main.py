@@ -1,63 +1,145 @@
-"""Containers Dashboard BFF — Phase A skeleton.
+"""FastAPI application factory for the Containers Dashboard BFF.
 
-Full implementation arrives in Phase B (read-only) and following.
-This file only provides the FastAPI factory and the public health
-endpoint so that the gateway + healthchecks work out of the box.
+Routes mounted under /api/* (gateway strips /containers/ prefix).
 """
 from __future__ import annotations
 
 import logging
+import logging.handlers
 import os
+import sys
 from contextlib import asynccontextmanager
-from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
+from pythonjsonlogger import jsonlogger
+
+from .errors import DomainError
+from .middleware.audit import AuditMiddleware
+from .repos.db import run_migrations
+from .repos.docker_repo import get_docker_repo
+from .routers import containers, health, images, networks, summary, volumes
+from .settings import settings
 
 
-logging.basicConfig(
-    level=os.environ.get("LOG_LEVEL", "INFO"),
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
-log = logging.getLogger("containers_dashboard")
+def _setup_logging(level: str) -> None:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(
+        jsonlogger.JsonFormatter(
+            "%(asctime)s %(name)s %(levelname)s %(message)s",
+            rename_fields={"asctime": "ts", "levelname": "level"},
+        )
+    )
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(level.upper())
+    logging.getLogger("docker").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+    # Audit logger: stdout (root) + RotatingFileHandler (Filebeat tails it)
+    audit_logger = logging.getLogger("containers_dashboard.audit")
+    audit_logger.setLevel(logging.INFO)
+
+    try:
+        log_dir = os.path.dirname(settings.audit_log_path)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+        file_handler = logging.handlers.RotatingFileHandler(
+            settings.audit_log_path,
+            maxBytes=50 * 1024 * 1024,   # 50 MiB
+            backupCount=3,
+            encoding="utf-8",
+        )
+        file_handler.setFormatter(logging.Formatter("%(message)s"))
+        audit_logger.handlers = [
+            h for h in audit_logger.handlers
+            if not isinstance(h, logging.handlers.RotatingFileHandler)
+        ] + [file_handler]
+    except OSError as e:
+        logging.getLogger("containers_dashboard.bff").warning(
+            "audit file handler disabled (%s): %s — events go to stdout only",
+            settings.audit_log_path, e,
+        )
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    log.info("containers-dashboard-bff starting (Phase A skeleton)")
+async def _lifespan(app: FastAPI):
+    _setup_logging(settings.log_level)
+    log = logging.getLogger("containers_dashboard.bff")
+
+    run_migrations()
+    log.info("sqlite migrations applied (path=%s)", settings.sqlite_path)
+
+    repo = get_docker_repo()
+    if repo.ping():
+        log.info("docker daemon reachable (host=%s)", settings.docker_host)
+    else:
+        log.warning("docker daemon NOT reachable at %s — endpoints will return 503", settings.docker_host)
+
+    log.info("containers-dashboard-bff ready")
     yield
-    log.info("containers-dashboard-bff stopping")
+    log.info("containers-dashboard-bff shutting down")
+    repo.close()
 
 
-app = FastAPI(
-    title="Containers Dashboard BFF",
-    version="0.1.0",
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
-    lifespan=lifespan,
-)
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="Containers Dashboard BFF",
+        version="0.1.0",
+        docs_url="/api/docs",
+        openapi_url="/api/openapi.json",
+        lifespan=_lifespan,
+    )
+
+    app.add_middleware(AuditMiddleware)
+
+    # Routers — all under /api
+    app.include_router(health.router, prefix="/api")
+    app.include_router(summary.router, prefix="/api")
+    app.include_router(containers.router, prefix="/api")
+    app.include_router(images.router, prefix="/api")
+    app.include_router(volumes.router, prefix="/api")
+    app.include_router(networks.router, prefix="/api")
+
+    # ---- Error handlers (design.md §7.1 envelope) ----
+    @app.exception_handler(DomainError)
+    async def _domain(_: Request, exc: DomainError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
+
+    @app.exception_handler(RequestValidationError)
+    async def _request_validation(_: Request, exc: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "invalid_payload",
+                "message": "request validation failed",
+                "details": {"errors": jsonable_encoder(exc.errors())},
+            },
+        )
+
+    @app.exception_handler(ValidationError)
+    async def _validation(_: Request, exc: ValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "invalid_payload",
+                "message": "request validation failed",
+                "details": {"errors": jsonable_encoder(exc.errors())},
+            },
+        )
+
+    @app.exception_handler(Exception)
+    async def _unhandled(_: Request, exc: Exception) -> JSONResponse:  # pragma: no cover
+        logging.getLogger("containers_dashboard.bff").exception("unhandled: %s", exc)
+        return JSONResponse(
+            status_code=500,
+            content={"error": "internal_error", "message": "internal server error", "details": {}},
+        )
+
+    return app
 
 
-@app.get("/api/health")
-async def health() -> dict[str, Any]:
-    """Public health endpoint — no auth (overridden in nginx).
-
-    Phase A: returns ok if process is alive.
-    Phase B will check docker.sock + sqlite.
-    """
-    docker_ok = _check_docker_socket()
-    return {
-        "status": "ok" if docker_ok else "degraded",
-        "docker": "ok" if docker_ok else "unavailable",
-        "sqlite": "ok",  # placeholder until Phase B
-        "phase": "A",
-    }
-
-
-def _check_docker_socket() -> bool:
-    """Best-effort check that the socket file exists and is reachable."""
-    sock = "/var/run/docker.sock"
-    try:
-        return os.path.exists(sock)
-    except OSError:
-        return False
+app = create_app()

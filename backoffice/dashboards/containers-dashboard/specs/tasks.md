@@ -82,52 +82,52 @@ Antes de empezar **cualquier** fase:
 
 ### B.1 — BFF skeleton FastAPI
 
-- [ ] **B.1.1** `bff/Dockerfile` (Python 3.12-slim).
-- [ ] **B.1.2** `bff/requirements.txt`: `fastapi[standard]==0.115.*`, `docker==7.*`, `sqlmodel`, `pydantic-settings`, `websockets`.
-- [ ] **B.1.3** Estructura `bff/app/` según design §2.3.
-- [ ] **B.1.4** `app/main.py` con FastAPI factory, OpenAPI en `/api/openapi.json`, lifespan con conexión docker-py.
-- [ ] **B.1.5** `app/deps.py`: `current_user`, `current_groups`, `require_writer`, `require_admin`.
-- [ ] **B.1.6** `app/settings.py`: vars del design §9.2.
+- [x] **B.1.1** `bff/Dockerfile` (Python 3.12-slim).
+- [x] **B.1.2** `bff/requirements.txt`: `fastapi[standard]==0.115.*`, `docker==7.*`, `sqlmodel`, `pydantic-settings`, `websockets`.
+- [x] **B.1.3** Estructura `bff/app/` según design §2.3.
+- [x] **B.1.4** `app/main.py` con FastAPI factory, OpenAPI en `/api/openapi.json`, lifespan con conexión docker-py.
+- [x] **B.1.5** `app/deps.py`: `current_user`, `current_groups`, `require_writer`, `require_admin`.
+- [x] **B.1.6** `app/settings.py`: vars del design §9.2.
 
 ### B.2 — Docker repo
 
-- [ ] **B.2.1** `app/repos/docker_repo.py`: wrapper sobre `docker.from_env()` con timeout configurable.
-- [ ] **B.2.2** Métodos read-only: `list_containers`, `get_container`, `get_logs`, `stream_stats`, `inspect`, `list_images`, `list_volumes`, `list_networks`.
-- [ ] **B.2.3** Mapeo de exceptions a HTTP según design §7.3 — decorador o middleware.
-- [ ] **B.2.4** Reintento con backoff para `ConnectionError` socket.
+- [x] **B.2.1** `app/repos/docker_repo.py`: wrapper sobre `docker.from_env()` con timeout configurable.
+- [x] **B.2.2** Métodos read-only: `list_containers`, `get_container`, `get_logs`, `stream_stats`, `inspect`, `list_images`, `list_volumes`, `list_networks`.
+- [x] **B.2.3** Mapeo de exceptions a HTTP según design §7.3 — decorador o middleware.
+- [ ] **B.2.4** Reintento con backoff para `ConnectionError` socket. *(Aplazado a Phase D — actualmente un fallo de socket sale como 503 sin retry, suficiente para MVP read-only.)*
 
 ### B.3 — Safety modules
 
-- [ ] **B.3.1** `app/safety/denylist.py`: set `DENYLIST` hard-coded (§7.1 requirements) + helpers `is_protected(name)` y `assert_not_protected(name)`.
-- [ ] **B.3.2** `app/safety/redact.py`: `SECRET_RE` + `redact_env(env_dict)` que devuelve nuevo dict con valores redactados.
-- [ ] **B.3.3** Tests unitarios para ambos (denylist hits, regex casos edge).
+- [x] **B.3.1** `app/safety/denylist.py`: set `DENYLIST` hard-coded (§7.1 requirements) + helpers `is_protected(name)` y `assert_not_protected(name)`.
+- [x] **B.3.2** `app/safety/redact.py`: `SECRET_RE` + `redact_env(env_dict)` que devuelve nuevo dict con valores redactados.
+- [x] **B.3.3** Tests unitarios para ambos (denylist hits, regex casos edge).
 
 ### B.4 — Endpoints read-only
 
-- [ ] **B.4.1** `app/routers/health.py` con `GET /api/health` (público).
-- [ ] **B.4.2** `app/routers/summary.py` con `GET /api/summary` (US-9).
-- [ ] **B.4.3** `app/routers/containers.py` con: list, detail, logs (paged), inspect.
-- [ ] **B.4.4** `app/routers/containers.py` SSE: `logs/stream` y `stats` con cancelación on-disconnect.
-- [ ] **B.4.5** `app/routers/images.py`, `volumes.py`, `networks.py` con `GET` list (US-7).
-- [ ] **B.4.6** Marcar `is_protected` en `ContainerSummary` consultando denylist.
-- [ ] **B.4.7** Aplicar `redact_env` en detail/inspect.
+- [x] **B.4.1** `app/routers/health.py` con `GET /api/health` (público).
+- [x] **B.4.2** `app/routers/summary.py` con `GET /api/summary` (US-9).
+- [x] **B.4.3** `app/routers/containers.py` con: list, detail, logs (paged), inspect.
+- [x] **B.4.4** `app/routers/containers.py` SSE: `logs/stream` y `stats` con cancelación on-disconnect.
+- [x] **B.4.5** `app/routers/images.py`, `volumes.py`, `networks.py` con `GET` list (US-7).
+- [x] **B.4.6** Marcar `is_protected` en `ContainerSummary` consultando denylist.
+- [x] **B.4.7** Aplicar `redact_env` en detail/inspect.
 
 ### B.5 — SQLite migration
 
-- [ ] **B.5.1** `app/repos/migrations/001_initial.sql` con DDL design §4.1 (solo audit_log).
-- [ ] **B.5.2** Runner idempotente al arrancar (mismo patrón kafka-dashboard).
+- [x] **B.5.1** `app/repos/migrations/001_initial.sql` con DDL design §4.1 (solo audit_log).
+- [x] **B.5.2** Runner idempotente al arrancar (mismo patrón kafka-dashboard).
 
 ### B.6 — Tests de contrato
 
-- [ ] **B.6.1** `bff/tests/contract/test_read_only.py`: matriz role × endpoint × status para los GETs.
-- [ ] **B.6.2** Cubre AC-1.1..AC-1.5, AC-2.1..AC-2.4, AC-7.1..AC-7.4, AC-9.1..AC-9.2.
+- [ ] **B.6.1** `bff/tests/contract/test_read_only.py`: matriz role × endpoint × status para los GETs. *(Aplazado: smoke manual cubre el matrix; añadir CI test en Phase G.)*
+- [ ] **B.6.2** Cubre AC-1.1..AC-1.5, AC-2.1..AC-2.4, AC-7.1..AC-7.4, AC-9.1..AC-9.2. *(Mismo motivo que B.6.1.)*
 
 ### B.7 — Smoke tests Fase B
 
-- [ ] **B.7.1** Añadir sección "Fase B" a `smoke-tests.md`.
-- [ ] **B.7.2** Listar containers, ver detalle de uno, descargar logs, abrir SSE stats por 5s.
-- [ ] **B.7.3** Verificar que un container en denylist sale con `is_protected: true`.
-- [ ] **B.7.4** Verificar `redact_env` con un container que tenga env `*_PASSWORD`.
+- [x] **B.7.1** Añadir sección "Fase B" a `smoke-tests.md`.
+- [x] **B.7.2** Listar containers, ver detalle de uno, descargar logs, abrir SSE stats por 5s.
+- [x] **B.7.3** Verificar que un container en denylist sale con `is_protected: true`.
+- [x] **B.7.4** Verificar `redact_env` con un container que tenga env `*_PASSWORD`.
 
 **Cierre Fase B**: US-1, US-2, US-3, US-7, US-9 marcadas como "Implemented" en `requirements.md`.
 
