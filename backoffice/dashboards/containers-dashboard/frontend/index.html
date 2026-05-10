@@ -10,6 +10,7 @@
   <script src="/containers/assets/xterm.js"></script>
   <script src="/containers/assets/xterm-addon-fit.js"></script>
   <script src="/containers/assets/mermaid.min.js"></script>
+  <script src="/containers/assets/svg-pan-zoom.min.js"></script>
   <script>
     // Mermaid 10 — initialize once at page load (Phase I, design.md §13.7)
     if (window.mermaid) {
@@ -33,12 +34,12 @@
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
       <a href="#/" class="text-lg font-semibold hover:underline">📦 Containers Dashboard</a>
       <nav class="flex gap-3 text-sm">
-        <a href="#/"           class="hover:underline" :class="route.view==='projects' || route.view==='project-detail' ? 'text-amber-300' : ''">Projects</a>
+        <a href="#/"           class="hover:underline" :class="route.view==='home' ? 'text-amber-300' : ''">Home</a>
+        <a href="#/projects"   class="hover:underline" :class="route.view==='projects' || route.view==='project-detail' ? 'text-amber-300' : ''">Projects</a>
         <a href="#/containers" class="hover:underline" :class="route.view==='containers' || route.view==='container-detail' ? 'text-amber-300' : ''">Containers</a>
         <a href="#/images"     class="hover:underline" :class="route.view==='images' ? 'text-amber-300' : ''">Images</a>
         <a href="#/volumes"    class="hover:underline" :class="route.view==='volumes' ? 'text-amber-300' : ''">Volumes</a>
         <a href="#/networks"   class="hover:underline" :class="route.view==='networks' ? 'text-amber-300' : ''">Networks</a>
-        <a href="#/home"       class="hover:underline" :class="route.view==='home' ? 'text-amber-300' : ''">Home</a>
       </nav>
       <div class="flex-1"></div>
       <div class="text-sm flex items-center gap-3">
@@ -71,7 +72,8 @@
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
 
     <!-- ============== PROJECTS LIST (Phase I — landing) ============== -->
-    <section x-show="route.view==='projects'" x-data="projectsView()" x-init="load()" class="space-y-4">
+    <template x-if="route.view==='projects'">
+    <section x-data="projectsView()" x-init="load()" class="space-y-4">
       <div class="flex items-baseline gap-4">
         <h1 class="text-2xl font-semibold">Projects</h1>
         <p class="text-sm text-slate-500">Containers agrupados por proyecto Compose.</p>
@@ -119,11 +121,13 @@
         </template>
       </div>
     </section>
+    </template>
 
     <!-- ============== PROJECT DETAIL (Phase I) ============== -->
-    <section x-show="route.view==='project-detail'" x-data="projectDetailView()" x-init="load(); $watch('route.name', () => load()); $watch('route.tab', t => { if (t==='topology') setTimeout(()=>renderGraph(), 50); })" class="space-y-4">
+    <template x-if="route.view==='project-detail'">
+    <section x-data="projectDetailView()" x-init="init(); load()" class="space-y-4">
       <div class="flex items-baseline gap-3">
-        <a href="#/" class="text-sm text-slate-600 hover:underline">← Projects</a>
+        <a href="#/projects" class="text-sm text-slate-600 hover:underline">← Projects</a>
         <h1 class="text-2xl font-semibold" x-text="route.name"></h1>
         <span x-show="detail" :class="{
             'bg-green-100 text-green-700':  detail?.aggregate_status==='up',
@@ -143,7 +147,7 @@
       <div x-show="!loading && detail">
         <!-- Tab strip -->
         <div class="border-b flex gap-1 text-sm">
-          <template x-for="t in ['overview','topology','networks','volumes']" :key="t">
+          <template x-for="t in ['topology','overview','networks','volumes']" :key="t">
             <a :href="`#/projects/${encodeURIComponent(route.name)}/${t}`"
                class="px-3 py-2 border-b-2 -mb-px"
                :class="route.tab===t ? 'border-amber-500 text-amber-700 font-semibold' : 'border-transparent text-slate-600 hover:text-slate-900'"
@@ -165,7 +169,7 @@
               </tr>
             </thead>
             <tbody>
-              <template x-for="s in detail.services" :key="s.container_id">
+              <template x-for="s in (detail?.services || [])" :key="s.container_id">
                 <tr class="border-t">
                   <td class="px-3 py-2 font-medium" x-text="s.name"></td>
                   <td class="px-3 py-2">
@@ -196,24 +200,49 @@
 
         <!-- Topology tab -->
         <div x-show="route.tab==='topology'" class="mt-4 space-y-3">
-          <div class="flex items-center gap-4 text-sm">
+          <!-- Controls row -->
+          <div class="flex items-center gap-4 text-sm flex-wrap">
             <span class="font-medium">Show:</span>
-            <label class="flex items-center gap-1"><input type="checkbox" x-model="filters.depends_on" @change="renderGraph()" /> depends_on (solid)</label>
-            <label class="flex items-center gap-1"><input type="checkbox" x-model="filters.network" @change="renderGraph()" /> networks (dashed)</label>
-            <label class="flex items-center gap-1"><input type="checkbox" x-model="filters.volume" @change="renderGraph()" /> volumes (thick)</label>
+            <label class="flex items-center gap-1"><input type="checkbox" x-model="filters.depends_on" @change="renderGraph()" /> depends_on</label>
+            <label class="flex items-center gap-1"><input type="checkbox" x-model="filters.network" @change="renderGraph()" /> networks</label>
+            <label class="flex items-center gap-1"><input type="checkbox" x-model="filters.volume" @change="renderGraph()" /> volumes</label>
+            <label class="flex items-center gap-1 ml-2"><input type="checkbox" x-model="filters.subgraphs" @change="renderGraph()" /> Group by network</label>
+            <span class="ml-3 inline-flex border rounded overflow-hidden text-xs">
+              <button @click="direction='TB'; renderGraph()" :class="direction==='TB' ? 'bg-amber-200' : 'bg-white hover:bg-slate-100'" class="px-2 py-0.5">TB ↓</button>
+              <button @click="direction='LR'; renderGraph()" :class="direction==='LR' ? 'bg-amber-200' : 'bg-white hover:bg-slate-100'" class="px-2 py-0.5 border-l">LR →</button>
+            </span>
+            <span class="ml-3 inline-flex border rounded overflow-hidden text-xs">
+              <button @click="zoomBy(0.8)" class="px-2 py-0.5 bg-white hover:bg-slate-100" title="Zoom out">−</button>
+              <button @click="zoomFit()" class="px-2 py-0.5 bg-white hover:bg-slate-100 border-l" title="Fit to screen">⛶</button>
+              <button @click="zoomBy(1.25)" class="px-2 py-0.5 bg-white hover:bg-slate-100 border-l" title="Zoom in">+</button>
+            </span>
             <button @click="renderGraph(true)" class="ml-auto text-xs px-2 py-1 border rounded hover:bg-slate-100">Re-render</button>
           </div>
+
+          <!-- Legend -->
+          <div class="flex items-center gap-4 text-xs text-slate-600 flex-wrap bg-slate-50 border rounded px-3 py-2">
+            <span class="font-medium text-slate-700">Legend:</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background:#bbf7d0; border:1px solid #16a34a"></span> running</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background:#fecaca; border:1px solid #dc2626"></span> exited / dead</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background:#fde68a; border:1px solid #d97706"></span> paused / restarting</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background:#e5e7eb; border:1px solid #6b7280"></span> other</span>
+            <span class="mx-2 text-slate-300">|</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-6 border-t-2 border-slate-700"></span> depends_on</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-6 border-t-2 border-dashed border-blue-500"></span> shared network</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-6 border-t-4 border-double border-purple-500"></span> shared volume</span>
+          </div>
+
           <div x-show="(detail?.services?.length || 0) > 20 && !graphForced" class="bg-amber-50 border border-amber-300 rounded p-3 text-sm">
-            ⚠️ Graph disabled — too many nodes (<span x-text="detail.services.length"></span>).
+            ⚠️ Graph disabled — too many nodes (<span x-text="detail?.services?.length || 0"></span>).
             <button @click="graphForced=true; renderGraph()" class="ml-2 underline">Render anyway</button>
           </div>
-          <div id="cd-graph" class="bg-white border rounded p-4 overflow-auto" style="min-height: 300px"></div>
-          <p class="text-xs text-slate-500">Click en un nodo para ir al detail del container.</p>
+          <div id="cd-graph" class="bg-white border rounded relative" style="min-height: 480px; height: 60vh; overflow: hidden"></div>
+          <p class="text-xs text-slate-500">💡 Click en un nodo para abrir el container · drag para mover · scroll para zoom · hover para tooltip.</p>
         </div>
 
         <!-- Networks tab -->
         <div x-show="route.tab==='networks'" class="mt-4 space-y-2">
-          <template x-for="n in detail.networks" :key="n.name">
+          <template x-for="n in (detail?.networks || [])" :key="n.name">
             <div class="bg-white border rounded p-3">
               <div class="flex items-center gap-2">
                 <a :href="`#/networks`" class="font-medium text-blue-700 hover:underline" x-text="n.name"></a>
@@ -227,12 +256,12 @@
               </div>
             </div>
           </template>
-          <div x-show="detail.networks.length === 0" class="text-slate-500 text-sm">— Sin networks —</div>
+          <div x-show="(detail?.networks?.length || 0) === 0" class="text-slate-500 text-sm">— Sin networks —</div>
         </div>
 
         <!-- Volumes tab -->
         <div x-show="route.tab==='volumes'" class="mt-4 space-y-2">
-          <template x-for="v in detail.volumes" :key="v.name">
+          <template x-for="v in (detail?.volumes || [])" :key="v.name">
             <div class="bg-white border rounded p-3">
               <div class="flex items-center gap-2">
                 <a :href="`#/volumes`" class="font-medium text-blue-700 hover:underline" x-text="v.name"></a>
@@ -245,13 +274,15 @@
               </div>
             </div>
           </template>
-          <div x-show="detail.volumes.length === 0" class="text-slate-500 text-sm">— Sin volumes —</div>
+          <div x-show="(detail?.volumes?.length || 0) === 0" class="text-slate-500 text-sm">— Sin volumes —</div>
         </div>
       </div>
     </section>
+    </template>
 
     <!-- ============== HOME VIEW (summary) ============== -->
-    <section x-show="route.view==='home'" x-data="homeView()" x-init="load()" class="space-y-6">
+    <template x-if="route.view==='home'">
+    <section x-data="homeView()" x-init="load()" class="space-y-6">
       <h1 class="text-2xl font-semibold">Resumen del host</h1>
       <div x-show="loading" class="text-slate-500">Cargando…</div>
 
@@ -302,9 +333,11 @@
         Cualquier intento de pararlos/borrarlos desde aquí responde 423 Locked.
       </div>
     </section>
+    </template>
 
     <!-- ============== CONTAINERS LIST ============== -->
-    <section x-show="route.view==='containers'" x-data="containersView()" x-init="load()" class="space-y-4">
+    <template x-if="route.view==='containers'">
+    <section x-data="containersView()" x-init="load()" class="space-y-4">
       <div class="flex items-center gap-3 flex-wrap">
         <h1 class="text-2xl font-semibold">Containers</h1>
         <span class="text-sm text-slate-500" x-text="`(${total} total · ${visible.length} visibles)`"></span>
@@ -397,9 +430,11 @@
         </div>
       </div>
     </section>
+    </template>
 
     <!-- ============== CONTAINER DETAIL ============== -->
-    <section x-show="route.view==='container-detail'" x-data="containerDetailView()" x-init="load()" class="space-y-4">
+    <template x-if="route.view==='container-detail'">
+    <section x-data="containerDetailView()" x-init="load()" class="space-y-4">
       <div class="flex items-center gap-3 flex-wrap">
         <a href="#/containers" class="text-blue-600 hover:underline text-sm">← Volver</a>
         <h1 class="text-2xl font-semibold flex items-center gap-2">
@@ -660,9 +695,11 @@
 
       </div>
     </section>
+    </template>
 
     <!-- ============== CONTAINER EXEC (admin-only WS shell) ============== -->
-    <section x-show="route.view==='container-exec'" x-data="containerExecView()" x-init="init()" class="space-y-3">
+    <template x-if="route.view==='container-exec'">
+    <section x-data="containerExecView()" x-init="init()" class="space-y-3">
       <div class="flex items-center gap-3 flex-wrap">
         <a :href="`#/containers/${encodeURIComponent(route.id)}/overview`" @click="cleanup()"
            class="text-blue-600 hover:underline text-sm">← Volver al detalle</a>
@@ -691,9 +728,11 @@
 
       <div id="cd-xterm" class="rounded shadow bg-black" style="height:65vh"></div>
     </section>
+    </template>
 
     <!-- ============== IMAGES ============== -->
-    <section x-show="route.view==='images'" x-data="imagesView()" x-init="load()" class="space-y-4">
+    <template x-if="route.view==='images'">
+    <section x-data="imagesView()" x-init="load()" class="space-y-4">
       <div class="flex items-center gap-3">
         <h1 class="text-2xl font-semibold">Images</h1>
         <span class="text-sm text-slate-500" x-text="`(${total} total)`"></span>
@@ -701,35 +740,53 @@
         <button @click="load()" class="bg-slate-200 hover:bg-slate-300 text-sm px-3 py-1.5 rounded">↻ Refrescar</button>
       </div>
       <div x-show="loading" class="text-slate-500">Cargando…</div>
-      <div x-show="!loading" class="bg-white rounded shadow overflow-hidden">
-        <table class="min-w-full text-sm">
-          <thead class="bg-slate-100 text-slate-600 text-left">
-            <tr>
-              <th class="px-3 py-2">Repository</th>
-              <th class="px-3 py-2 w-32">Tag</th>
-              <th class="px-3 py-2 w-28">ID</th>
-              <th class="px-3 py-2 w-24 text-right">Size</th>
-              <th class="px-3 py-2 w-20 text-right">Used</th>
-              <th class="px-3 py-2 w-12"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <template x-for="img in items" :key="img.id + ':' + img.tag">
-              <tr class="border-t">
-                <td class="px-3 py-2 font-mono text-xs" x-text="img.repository || '<none>'"></td>
-                <td class="px-3 py-2 font-mono text-xs" x-text="img.tag || '<none>'"></td>
-                <td class="px-3 py-2 font-mono text-xs text-slate-500" x-text="img.id_short"></td>
-                <td class="px-3 py-2 text-right" x-text="cd.fmt.mb(img.size_mb)"></td>
-                <td class="px-3 py-2 text-right" :class="img.containers_using > 0 ? 'text-emerald-700 font-medium' : 'text-slate-400'" x-text="img.containers_using"></td>
-                <td class="px-3 py-2 text-right">
-                  <button x-show="$store.app.canAdmin" @click="askDelete(img)"
-                          class="text-red-600 hover:text-red-800" title="Borrar imagen">🗑</button>
-                </td>
-              </tr>
-            </template>
-            <tr x-show="!loading && items.length===0"><td colspan="6" class="px-3 py-4 text-center text-slate-500">Sin imágenes</td></tr>
-          </tbody>
-        </table>
+
+      <!-- Grouped by registry / domain -->
+      <div x-show="!loading && items.length > 0" class="space-y-3">
+        <template x-for="g in groupedItems()" :key="g.domain">
+          <div class="bg-white rounded shadow overflow-hidden">
+            <!-- Group header -->
+            <button @click="toggleGroup(g.domain)" class="w-full flex items-center gap-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-left">
+              <span class="text-slate-500 w-4" x-text="collapsed[g.domain] ? '▶' : '▼'"></span>
+              <span class="font-mono text-sm font-semibold" x-text="g.domain"></span>
+              <span class="text-xs text-slate-600" x-text="`${g.count} image${g.count !== 1 ? 's' : ''}`"></span>
+              <span class="text-xs text-emerald-700" x-show="g.used > 0" x-text="`· ${g.used} in use`"></span>
+              <span class="ml-auto text-xs text-slate-500" x-text="cd.fmt.mb(g.totalSize)"></span>
+            </button>
+            <!-- Group body -->
+            <table x-show="!collapsed[g.domain]" class="min-w-full text-sm">
+              <thead class="bg-slate-50 text-slate-600 text-left">
+                <tr>
+                  <th class="px-3 py-2">Repository</th>
+                  <th class="px-3 py-2 w-32">Tag</th>
+                  <th class="px-3 py-2 w-28">ID</th>
+                  <th class="px-3 py-2 w-24 text-right">Size</th>
+                  <th class="px-3 py-2 w-20 text-right">Used</th>
+                  <th class="px-3 py-2 w-12"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="img in g.items" :key="img.id + ':' + img.tag">
+                  <tr class="border-t">
+                    <td class="px-3 py-2 font-mono text-xs" x-text="img.repository || '<none>'"></td>
+                    <td class="px-3 py-2 font-mono text-xs" x-text="img.tag || '<none>'"></td>
+                    <td class="px-3 py-2 font-mono text-xs text-slate-500" x-text="img.id_short"></td>
+                    <td class="px-3 py-2 text-right" x-text="cd.fmt.mb(img.size_mb)"></td>
+                    <td class="px-3 py-2 text-right" :class="img.containers_using > 0 ? 'text-emerald-700 font-medium' : 'text-slate-400'" x-text="img.containers_using"></td>
+                    <td class="px-3 py-2 text-right">
+                      <button x-show="$store.app.canAdmin" @click="askDelete(img)"
+                              class="text-red-600 hover:text-red-800" title="Borrar imagen">🗑</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
+      </div>
+
+      <div x-show="!loading && items.length === 0" class="bg-white rounded shadow p-8 text-center text-slate-500">
+        Sin imágenes
       </div>
 
       <!-- Remove confirmation modal (Phase F) -->
@@ -760,9 +817,11 @@
         </div>
       </div>
     </section>
+    </template>
 
     <!-- ============== VOLUMES ============== -->
-    <section x-show="route.view==='volumes'" x-data="volumesView()" x-init="load()" class="space-y-4">
+    <template x-if="route.view==='volumes'">
+    <section x-data="volumesView()" x-init="load()" class="space-y-4">
       <div class="flex items-center gap-3">
         <h1 class="text-2xl font-semibold">Volumes</h1>
         <span class="text-sm text-slate-500" x-text="`(${total} total)`"></span>
@@ -829,9 +888,11 @@
         </div>
       </div>
     </section>
+    </template>
 
     <!-- ============== NETWORKS ============== -->
-    <section x-show="route.view==='networks'" x-data="networksView()" x-init="load()" class="space-y-4">
+    <template x-if="route.view==='networks'">
+    <section x-data="networksView()" x-init="load()" class="space-y-4">
       <div class="flex items-center gap-3">
         <h1 class="text-2xl font-semibold">Networks</h1>
         <span class="text-sm text-slate-500" x-text="`(${total} total)`"></span>
@@ -905,6 +966,7 @@
         </div>
       </div>
     </section>
+    </template>
 
   </main>
 
@@ -1314,8 +1376,42 @@
         for (const img of this.items) {
           if (img.repository && img.tag && img.repository !== "<none>") img._confirm_name = `${img.repository}:${img.tag}`;
           else                                                            img._confirm_name = img.id_short;
+          // domain bucket: substring before first '/' if it looks like a registry
+          // (contains '.' or ':') — otherwise 'docker.io/library' for official images.
+          const repo = (img.repository || "").trim();
+          let domain = "📦 untagged / <none>";
+          if (repo) {
+            const slash = repo.indexOf("/");
+            if (slash > 0) {
+              const head = repo.slice(0, slash);
+              if (head.includes(".") || head.includes(":") || head === "localhost") {
+                domain = head;
+              } else {
+                // Multi-segment but no registry prefix → use first segment as namespace
+                domain = head;
+              }
+            } else {
+              // Single-segment repo (e.g. "alpine", "nginx") → official Docker Hub
+              domain = "docker.io/library";
+            }
+          }
+          img._domain = domain;
         }
       };
+      // Group accessor (computed each render — small lists)
+      v.groupedItems = function () {
+        const groups = {};
+        for (const img of this.items) {
+          const k = img._domain || "—";
+          (groups[k] = groups[k] || []).push(img);
+        }
+        // Sort: groups with most images first, but always docker.io/library last? No — just by count desc.
+        return Object.entries(groups)
+          .sort((a, b) => b[1].length - a[1].length)
+          .map(([domain, items]) => ({ domain, items, count: items.length, used: items.filter(i => i.containers_using > 0).length, totalSize: items.reduce((s, i) => s + (i.size_mb || 0), 0) }));
+      };
+      v.collapsed = {};  // domain -> bool
+      v.toggleGroup = function (domain) { this.collapsed[domain] = !this.collapsed[domain]; };
       return v;
     }
     function volumesView()  {
@@ -1477,30 +1573,104 @@
         loading: true,
         detail: null,
         graphForced: false,
-        filters: { depends_on: true, network: true, volume: true },
-        get route() { return cd.parseHash(); },
+        filters: { depends_on: true, network: true, volume: true, subgraphs: true },
+        direction: "TB",
+        _panZoom: null,
+        route: cd.parseHash(),
+        _hashHandler: null,
+        init() {
+          this._hashHandler = () => {
+            const prev = this.route;
+            const next = cd.parseHash();
+            this.route = next;
+            // If project name changed, reload data
+            if (prev.name !== next.name) this.load();
+            // If switched to topology tab, render the graph
+            if (next.tab === "topology") setTimeout(() => this.renderGraph(), 100);
+          };
+          window.addEventListener("hashchange", this._hashHandler);
+        },
+        destroy() {
+          try { window.removeEventListener("hashchange", this._hashHandler); } catch {}
+        },
         async load() {
+          const r = this.route;
+          if (r.view !== "project-detail" || !r.name) {
+            // Component is mounted but the user is not on a project-detail route
+            // (Alpine instantiates x-data even under x-show=false). Skip the fetch
+            // to avoid a spurious "project 'undefined' not found" toast.
+            this.loading = false;
+            return;
+          }
           this.loading = true;
           this.detail = null;
           try {
-            const name = this.route.name;
-            this.detail = await cd.call("GET", `/projects/${encodeURIComponent(name)}`);
-            // Auto-render graph if topology tab is active
-            if (this.route.tab === "topology") setTimeout(() => this.renderGraph(), 50);
+            this.detail = await cd.call("GET", `/projects/${encodeURIComponent(r.name)}`);
+            // Auto-render graph if topology tab is active (wait for DOM)
+            if (r.tab === "topology") {
+              await new Promise(res => setTimeout(res, 100));
+              this.renderGraph();
+            }
           } catch (e) {
             cd.toast("error", e.message || "No se pudo cargar el proyecto");
           } finally {
             this.loading = false;
           }
         },
+        // ---- Topology helpers ----
+        roleIcon(image) {
+          const img = String(image || "").toLowerCase();
+          // Order matters: more specific first
+          if (img.includes("nginx") || img.includes("traefik") || img.includes("haproxy") || img.includes("envoy") || img.includes("gateway")) return "🌐";
+          if (img.includes("keycloak") || img.includes("oauth") || img.includes("auth")) return "🔐";
+          if (img.includes("postgres") || img.includes("mysql") || img.includes("mariadb") || img.includes("mongo") || img.includes("cassandra") || img.includes("clickhouse")) return "🗄️";
+          if (img.includes("redis") || img.includes("memcached") || img.includes("cache")) return "⚡";
+          if (img.includes("kafka") || img.includes("rabbitmq") || img.includes("nats") || img.includes("zookeeper")) return "📨";
+          if (img.includes("elastic") || img.includes("opensearch") || img.includes("logstash") || img.includes("filebeat") || img.includes("kibana")) return "🔍";
+          if (img.includes("prometheus") || img.includes("grafana") || img.includes("alertmanager")) return "📊";
+          if (img.includes("portainer")) return "🐳";
+          if (img.includes("python") || img.includes("fastapi") || img.includes("uvicorn") || img.includes("gunicorn") || img.includes("/bff")) return "⚙️";
+          if (img.includes("node") || img.includes("npm") || img.includes("/fe")) return "💻";
+          return "📦";
+        },
+        stateEmoji(st) {
+          if (st === "running") return "🟢";
+          if (st === "exited" || st === "dead") return "🔴";
+          if (st === "paused" || st === "restarting") return "🟡";
+          return "⚪";
+        },
+        zoomBy(factor) {
+          if (this._panZoom) this._panZoom.zoomBy(factor);
+        },
+        zoomFit() {
+          if (this._panZoom) { this._panZoom.resize(); this._panZoom.fit(); this._panZoom.center(); }
+        },
+
         async renderGraph(force = false) {
+          // Wait for detail to load (watcher may fire before fetch resolves)
+          for (let i = 0; i < 30 && !this.detail; i++) {
+            await new Promise(r => setTimeout(r, 50));
+          }
           if (!this.detail) return;
           if (force) this.graphForced = true;
           const tooBig = this.detail.services.length > 20;
           if (tooBig && !this.graphForced) return;
 
-          const el = document.getElementById("cd-graph");
-          if (!el || !window.mermaid) return;
+          // Wait for the #cd-graph div to exist (tab DOM may not be visible yet)
+          let el = null;
+          for (let i = 0; i < 30; i++) {
+            el = document.getElementById("cd-graph");
+            if (el) break;
+            await new Promise(r => setTimeout(r, 50));
+          }
+          if (!el) return;
+          if (!window.mermaid) {
+            cd.toast("error", "Mermaid no se cargó (revisa /assets/mermaid.min.js)");
+            return;
+          }
+
+          // Tear down previous pan-zoom instance
+          if (this._panZoom) { try { this._panZoom.destroy(); } catch {} this._panZoom = null; }
 
           const stateClass = (st) => {
             if (st === "running") return "cdRunning";
@@ -1509,54 +1679,169 @@
             return "cdOther";
           };
           const sanitize = (s) => String(s || "").replace(/[^A-Za-z0-9_]/g, "_");
-          const lines = ["graph LR"];
-          // Nodes
-          for (const s of this.detail.services) {
+          const dir = this.direction || "TB";
+          const lines = [`graph ${dir}`];
+
+          // Build service index for tooltips & subgraph membership
+          const svcByName = {};
+          for (const s of this.detail.services) svcByName[s.name] = s;
+
+          const nodeLine = (s) => {
             const id = sanitize(s.name);
-            const label = `${s.name}\\n${s.container}`.replace(/"/g, "'");
-            lines.push(`  ${id}["${label}"]:::${stateClass(s.state)}`);
+            const icon = this.roleIcon(s.image);
+            const stEmoji = this.stateEmoji(s.state);
+            // Mermaid uses \n inside quotes for line breaks
+            const portsTxt = (s.ports && s.ports.length) ? ` · ${s.ports.length}p` : "";
+            const label = `${icon} ${s.name}\\n${stEmoji} ${s.state}${portsTxt}`.replace(/"/g, "'");
+            return `  ${id}["${label}"]:::${stateClass(s.state)}`;
+          };
+
+          // ---- Subgraphs by network (optional) ----
+          const useSubgraphs = !!this.filters.subgraphs;
+          const renderedNodes = new Set();
+          if (useSubgraphs && this.detail.networks && this.detail.networks.length > 0) {
+            // Pick informative networks: skip builtin + skip those that include all/none of the services
+            const totalSvc = this.detail.services.length;
+            const informative = this.detail.networks.filter(n =>
+              !n.is_builtin && n.services_in.length > 0 && n.services_in.length < totalSvc
+            );
+            // Group services into the smallest informative network they belong to
+            const assignment = {};
+            for (const n of informative) {
+              for (const sname of n.services_in) {
+                if (!assignment[sname]) assignment[sname] = n.name;
+              }
+            }
+            // Bucket
+            const buckets = {};
+            for (const s of this.detail.services) {
+              const bucket = assignment[s.name] || "__loose__";
+              (buckets[bucket] = buckets[bucket] || []).push(s);
+            }
+            for (const [netName, svcs] of Object.entries(buckets)) {
+              if (netName === "__loose__") {
+                for (const s of svcs) { lines.push(nodeLine(s)); renderedNodes.add(s.name); }
+              } else {
+                const sgId = "sg_" + sanitize(netName);
+                lines.push(`  subgraph ${sgId}["🔗 ${netName.replace(/"/g, "'")}"]`);
+                for (const s of svcs) { lines.push(nodeLine(s)); renderedNodes.add(s.name); }
+                lines.push(`  end`);
+              }
+            }
+          } else {
+            for (const s of this.detail.services) { lines.push(nodeLine(s)); renderedNodes.add(s.name); }
           }
-          // Edges (filtered)
+
+          // ---- Edges (filtered) ----
           for (const e of this.detail.graph.edges) {
             if (!this.filters[e.type]) continue;
             const f = sanitize(e.from);
             const t = sanitize(e.to);
             let arrow, label = "";
             if (e.type === "depends_on") arrow = "-->";
-            else if (e.type === "network") { arrow = "-.->"; label = `|${(e.meta?.network || "net")}|`; }
-            else if (e.type === "volume")  { arrow = "==>";  label = `|${(e.meta?.volume  || "vol")}|`; }
+            else if (e.type === "network") { arrow = "-.->"; label = `|"${(e.meta?.network || "net").replace(/"/g, "'")}"|`; }
+            else if (e.type === "volume")  { arrow = "==>";  label = `|"💾 ${(e.meta?.volume  || "vol").replace(/"/g, "'")}"|`; }
             else continue;
             lines.push(`  ${f} ${arrow}${label} ${t}`);
           }
-          // Class defs
-          lines.push("  classDef cdRunning fill:#bbf7d0,stroke:#16a34a;");
-          lines.push("  classDef cdExited  fill:#fecaca,stroke:#dc2626;");
-          lines.push("  classDef cdPaused  fill:#fde68a,stroke:#d97706;");
-          lines.push("  classDef cdOther   fill:#e5e7eb,stroke:#6b7280;");
+
+          // ---- Class defs (Tailwind-ish palette) ----
+          lines.push("  classDef cdRunning fill:#bbf7d0,stroke:#16a34a,stroke-width:2px,color:#064e3b;");
+          lines.push("  classDef cdExited  fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#7f1d1d;");
+          lines.push("  classDef cdPaused  fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#78350f;");
+          lines.push("  classDef cdOther   fill:#e5e7eb,stroke:#6b7280,stroke-width:2px,color:#1f2937;");
+
+          // ---- Edge styling (color by type) ----
+          // Mermaid 10 supports linkStyle by index — we colour by index based on emit order.
+          // We track edge type per emitted line:
+          const edgeTypes = [];
+          for (const e of this.detail.graph.edges) {
+            if (!this.filters[e.type]) continue;
+            edgeTypes.push(e.type);
+          }
+          edgeTypes.forEach((t, i) => {
+            if (t === "depends_on") lines.push(`  linkStyle ${i} stroke:#334155,stroke-width:2px;`);
+            else if (t === "network") lines.push(`  linkStyle ${i} stroke:#3b82f6,stroke-width:2px,stroke-dasharray:4 3;`);
+            else if (t === "volume")  lines.push(`  linkStyle ${i} stroke:#a855f7,stroke-width:3px;`);
+          });
 
           const code = lines.join("\n");
           try {
-            // Re-init each render to ensure clean state
             const id = "cdGraph_" + Date.now();
             const { svg } = await mermaid.render(id, code);
             el.innerHTML = svg;
-            // Click handlers — map node id (sanitized service name) → container_id
-            const idToContainer = {};
+
+            const svgEl = el.querySelector("svg");
+            if (svgEl) {
+              svgEl.style.width = "100%";
+              svgEl.style.height = "100%";
+              svgEl.style.maxWidth = "none";
+              svgEl.removeAttribute("height"); // let CSS govern
+            }
+
+            // Tooltips via <title> on each node
+            const svcBySvgId = {};
+            const svcByLabel = {};
             for (const s of this.detail.services) {
-              idToContainer[sanitize(s.name)] = s.container_id;
+              svcBySvgId[sanitize(s.name)] = s;
+              svcByLabel[s.name] = s;
             }
             el.querySelectorAll("g.node").forEach((node) => {
-              node.style.cursor = "pointer";
               const idAttr = node.id || "";
-              // mermaid generates ids like "flowchart-<svc>-<num>"
-              const m = idAttr.match(/^flowchart-([^-]+)/);
-              const svcId = m ? m[1] : "";
-              const cid = idToContainer[svcId];
-              if (!cid) return;
+              // mermaid generates ids like "flowchart-<svc>-<num>" but inside subgraphs it can vary
+              const m = idAttr.match(/flowchart-([A-Za-z0-9_]+)-\d+$/) || idAttr.match(/^flowchart-([A-Za-z0-9_]+)/);
+              let svcId = m ? m[1] : "";
+              let s = svcBySvgId[svcId];
+              if (!s) {
+                // Fallback: extract first line of visible label and match against service names
+                const txt = (node.textContent || "").trim().split(/\s+/);
+                for (const tok of txt) {
+                  if (svcByLabel[tok]) { s = svcByLabel[tok]; break; }
+                }
+              }
+              if (!s) return;
+              node.style.cursor = "pointer";
+              // Build tooltip text
+              const portsList = (s.ports && s.ports.length) ? s.ports.join(", ") : "—";
+              const dependsList = (s.depends_on && s.depends_on.length) ? s.depends_on.join(", ") : "—";
+              const tooltip = [
+                `service: ${s.name}`,
+                `container: ${s.container}`,
+                `state: ${s.state}`,
+                `image: ${s.image}`,
+                `ports: ${portsList}`,
+                `depends_on: ${dependsList}`,
+                s.created ? `created: ${s.created}` : null,
+              ].filter(Boolean).join("\n");
+              // SVG <title> for native browser tooltip
+              let titleEl = node.querySelector("title");
+              if (!titleEl) {
+                titleEl = document.createElementNS("http://www.w3.org/2000/svg", "title");
+                node.insertBefore(titleEl, node.firstChild);
+              }
+              titleEl.textContent = tooltip;
+              // Click → container detail
               node.addEventListener("click", () => {
-                location.hash = `#/containers/${encodeURIComponent(cid)}`;
+                location.hash = `#/containers/${encodeURIComponent(s.container_id)}`;
               });
             });
+
+            // Initialise pan/zoom (only if svg-pan-zoom is present)
+            if (svgEl && window.svgPanZoom) {
+              try {
+                this._panZoom = svgPanZoom(svgEl, {
+                  zoomEnabled: true,
+                  controlIconsEnabled: false,
+                  fit: true,
+                  center: true,
+                  minZoom: 0.3,
+                  maxZoom: 5,
+                  contain: false,
+                });
+              } catch (e) {
+                console.warn("svg-pan-zoom init failed:", e);
+              }
+            }
           } catch (err) {
             cd.toast("error", "Mermaid render failed: " + (err.message || err));
             el.textContent = "Error rendering graph";
