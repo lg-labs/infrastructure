@@ -274,39 +274,27 @@ Antes de empezar **cualquier** fase:
 
 ### G.1 — User guide propio
 
-- [ ] **G.1.1** Crear `backoffice/dashboards/kafka-dashboard/docs/user-guide.es.md` con:
-  - Introducción y vista general
-  - Cómo entrar (vía BackOffice)
-  - Crear topic (incluyendo convención `lglabs.*` y owners)
-  - Editar/borrar topic
-  - Gestionar schemas (registrar, evolucionar)
-  - Gestionar ACL-metadata + banner explicativo
-  - Export JSON
-  - Diagramas Mermaid (flujo crear topic, arquitectura del sub-stack)
-  - Runbooks K1–K5 (Kafka caído, Registry caído, SQLite corrupto, owners.yaml malformado, restore desde backup)
-- [ ] **G.1.2** Versión EN paralela: `user-guide.en.md`.
-- [ ] **G.1.3** Linkear desde `backoffice/docs/user-guide.{es,en}.md` (sección "Sub-dashboards").
+- [x] **G.1.1** Crear `backoffice/dashboards/kafka-dashboard/docs/user-guide.es.md` con estructura 2-partes (usuario + operador), diagramas Mermaid (sequence SSO + arch sub-stack + audit pipeline), runbooks R1–R5, tabla de errores, tabla de limitaciones L1–L5.
+- [x] **G.1.2** Versión EN paralela: `user-guide.en.md` (mirror perfecto, cross-link 🇬🇧/🇪🇸 en cabecera).
+- [ ] **G.1.3** Linkear desde `backoffice/docs/user-guide.{es,en}.md` (sección "Sub-dashboards"). _(diferido a Fase H — depende de cleanup BackOffice docs)_
 
 ### G.2 — README del sub-stack
 
-- [ ] **G.2.1** Actualizar `backoffice/dashboards/kafka-dashboard/README.md` con índice final, links a todo, badges de estado.
+- [x] **G.2.1** Reescribir `backoffice/dashboards/kafka-dashboard/README.md` siguiendo convención BackOffice (Quickstart + creds blockquote + arquitectura ASCII + tabla roles + links a docs/specs + smoke tests).
 
 ### G.3 — CI
 
-- [ ] **G.3.1** Añadir job `kafka-dashboard-smoke` a `.github/workflows/test-dotfiles.yml` (opt-in via workflow_dispatch + schedule, igual que `backoffice-smoke`).
-- [ ] **G.3.2** El job ejecuta el smoke-tests del kafka-dashboard.
+- [x] **G.3.1** Añadir job `kafka-dashboard-smoke` a `.github/workflows/test-dotfiles.yml` (opt-in via `workflow_dispatch` + `schedule`, mismo patrón que `backoffice-smoke`).
+- [x] **G.3.2** El job ejecuta `smoke-c.sh` (CRUD + RBAC) y `smoke-f.sh` (audit pipeline E2E); dump de logs ante fallo.
 
 ### G.4 — Makefile targets
 
-- [ ] **G.4.1** Añadir a `Makefile` raíz:
-  - `kafka-dashboard-up`, `kafka-dashboard-down`, `kafka-dashboard-logs`, `kafka-dashboard-status`
-  - `kafka-dashboard-backup` (tar del volume)
-  - `kafka-dashboard-restore FILE=...`
-- [ ] **G.4.2** Documentar en `Makefile help`.
+- [x] **G.4.1** **Decisión**: NO añadir targets propios al `Makefile` raíz. El sub-stack se compone con el BackOffice por diseño (`include:` en `backoffice/docker-compose.yml`); `make backoffice-up/down/clean` ya cubre el ciclo. Backup/restore documentados como recetas manuales en runbook R5 (ver user-guide §2.6).
+- [x] **G.4.2** Documentado en user-guide §2.2 (start/stop) y README del sub-stack (Quickstart).
 
 ### G.5 — Root README
 
-- [ ] **G.5.1** Mencionar el Kafka Dashboard en la sección "Start with BackOffice" del root `README.md`.
+- [x] **G.5.1** Bloque `## [Start with Kafka Dashboard][kafka-dashboard-doc]` añadido entre BackOffice y "All in one" en root `README.md`, con creds + warning de pre-reqs + stop/destroy + link refs `[kafka-dashboard]` y `[kafka-dashboard-doc]`.
 
 **Cierre Fase G**: documentación completa, CI verde, MVP del Kafka Dashboard listo para anuncio.
 

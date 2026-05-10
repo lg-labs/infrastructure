@@ -125,3 +125,78 @@ jobs:
         if: always()
         run: |
           make all-clean || true
+
+  # Smoke E2E del Kafka Dashboard (sub-stack del BackOffice).
+  # Requiere todo el stack BackOffice + Kafka + ELK arriba.
+  # Sólo en schedule o ejecución manual (pesado).
+  kafka-dashboard-smoke:
+    name: Kafka Dashboard E2E smoke
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: 🛠️ Show docker version
+        run: docker version && docker compose version
+
+      - name: 📋 Prepare backoffice .env (lab defaults)
+        working-directory: backoffice
+        run: |
+          if [ ! -f .env ]; then
+            cp .env.example .env || true
+          fi
+          sudo sysctl -w vm.max_map_count=262144 || true
+
+      - name: 🚀 Bring up dependent stacks (elk, kafka)
+        run: |
+          make elk-up
+          make kafka-up
+          # Esperar ES
+          for i in $(seq 1 60); do
+            if curl -ks -o /dev/null -w "%{http_code}" https://localhost:9200 -u elastic:lgpass | grep -qE "200|401"; then
+              echo "ES responsive"; break
+            fi
+            echo "waiting ES... ($i)"; sleep 5
+          done
+
+      - name: 🚀 Bring up backoffice (incluye kafka-dashboard)
+        run: |
+          make backoffice-up
+          # Esperar gateway
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/oauth2/ping || echo 000)
+            echo "ping=$code"
+            [ "$code" = "200" ] && break
+            sleep 4
+          done
+          # Esperar BFF
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/kafka/api/health || echo 000)
+            echo "kafka bff health=$code"
+            [ "$code" = "200" ] && break
+            sleep 4
+          done
+
+      - name: ✅ Smoke C — CRUD topics + RBAC E2E
+        working-directory: backoffice/dashboards/kafka-dashboard
+        run: bash bff/tests/scripts/smoke-c.sh
+
+      - name: ✅ Smoke F — Audit pipeline E2E (BFF → Filebeat → Logstash → ES)
+        working-directory: backoffice/dashboards/kafka-dashboard
+        run: bash bff/tests/scripts/smoke-f.sh
+
+      - name: 📜 Dump logs on failure
+        if: failure()
+        run: |
+          docker ps -a
+          for c in lg-infra-backoffice-kafka-dashboard-bff lg-infra-backoffice-kafka-dashboard-fe lg-infra-backoffice-gateway lg-infra-backoffice-keycloak filebeat01 logstash01 es01; do
+            echo "=== $c ==="
+            docker logs --tail 100 "$c" 2>&1 || true
+          done
+
+      - name: 🧹 Cleanup
+        if: always()
+        run: |
+          make all-clean || true

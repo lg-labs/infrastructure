@@ -194,6 +194,30 @@ make backoffice-down
 make backoffice-clean
 ```
 
+## [Start with Kafka Dashboard][kafka-dashboard-doc]
+Microfrontend del BackOffice (`/kafka/`) para gestión declarativa de **topics**, **schemas** y **ACL-metadata** del cluster Kafka, con SSO + roles del BackOffice y audit a `backoffice-audit-*`. Arranca automáticamente con el BackOffice (no tiene comando `make` propio).
+
+```shell
+make backoffice-up   # incluye kafka-dashboard
+```
+
+> 👋  **[Kafka Dashboard, Port:8080/kafka/][kafka-dashboard]**
+>
+> _Mismos 4 usuarios seed del BackOffice (admin / operator / support / viewer):_
+> Username: `lglabsadmin` (o `lglabsoperator`, `lglabssupport`, `lglabsviewer`)
+> Password: `lgpass`
+>
+> ⚠️ Requiere `make elk-up` y `make kafka-up` previamente (o usar `make all-up`).
+
+😴 Kafka Dashboard **stop** (junto al BackOffice):
+```shell
+make backoffice-down
+```
+⛔️ Kafka Dashboard **destroy** (borra `backoffice-kafka-dashboard-data`):
+```shell
+make backoffice-clean
+```
+
 # All in one
 Using `makefile` to **start** All.
 
@@ -230,6 +254,7 @@ The MIT License (MIT). Please see [License][3] for more information.
 [kafka]: http://localhost:9080 "http://localhost:9080"
 [postgres-ui]: http://localhost:5012 "http://localhost:5012"
 [backoffice]: http://localhost:8080 "http://localhost:8080"
+[kafka-dashboard]: http://localhost:8080/kafka/ "http://localhost:8080/kafka/"
 
 
 [elk-doc]: elk/README.md
@@ -239,3 +264,4 @@ The MIT License (MIT). Please see [License][3] for more information.
 [splunk-doc]: splunk/README.md
 [kafka-doc]: kafka/README.md
 [backoffice-doc]: backoffice/README.md
+[kafka-dashboard-doc]: backoffice/dashboards/kafka-dashboard/README.md
