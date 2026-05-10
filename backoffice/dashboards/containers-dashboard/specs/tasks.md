@@ -1,6 +1,6 @@
 # Containers Dashboard — Tasks
 
-> Versión: 1.0.0 · Estado: MVP Completed · Última actualización: 2026-05-10
+> Versión: 1.1.0 · Estado: MVP Completed · Phase I in progress · Última actualización: 2026-05-10
 >
 > Plan de implementación. Cada fase tiene **entregables verificables** y **criterio de cierre**. No se cierra una fase sin smoke test pasando + spec actualizado.
 >
@@ -367,3 +367,74 @@ Una fase **no se cierra** sin:
 3. Spec actualizado si la implementación reveló algo (raro pero posible).
 4. Sin regresiones en BackOffice MVP ni Kafka Dashboard MVP (smoke-c.sh + smoke-f.sh de kafka).
 5. Commit dedicado a la fase con mensaje `feat(containers-dashboard): phase X — <título>` y autor `lglabs <105936384+lglabs@users.noreply.github.com>`.
+
+---
+
+## Fase I — Projects view (agrupación + diagrama de componentes)
+
+**Objetivo:** Implementar US-10 (`requirements.md`) según el diseño §13 de `design.md`.
+**DoD:** I.x todas en `[x]`, smoke-i.sh 100% pass, sin regresiones en smoke-{c,d,f,g}.sh, commits con autor lglabs, push a origin/master.
+
+### I.0 — Specs (cerrada antes de codear)
+
+- [x] **I.0.1** Adenda en `requirements.md` v0.3.0: capability C-P + US-10 (AC-10.1..10.11).
+- [x] **I.0.2** Adenda en `design.md` v0.3.0: §13 completo (discovery, modelo, repo, router, frontend, vendoreo, audit, casos límite, NFR-10..12, AD-13.1..7).
+- [x] **I.0.3** Tasks Phase I (este documento).
+- [x] **I.0.4** Smoke spec en `smoke-tests.md` § Phase I (≥ 8 casos: list, list+unmanaged, get existing, get unknown, RBAC viewer, RBAC unauth, audit emitido, perf < 1s).
+
+### I.1 — BFF: ProjectsRepo + router (read-only)
+
+- [ ] **I.1.1** `bff/app/models/projects.py`: ProjectService, ProjectNetwork, ProjectVolume, ProjectListItem, GraphNode, GraphEdge, ProjectDetail.
+- [ ] **I.1.2** `bff/app/repos/projects_repo.py`: `ProjectsRepo` con `list_projects(include_unmanaged)`, `get_project(name)`, `_build_graph()` (star pattern, dedupe, skip default bridge).
+- [ ] **I.1.3** `bff/app/routers/projects.py`: GET `/projects` y GET `/projects/{name}`, ambos `require_any_role`. 404 si project no existe; soporte `include_unmanaged` query.
+- [ ] **I.1.4** `bff/app/errors.py`: añadir `ProjectNotFound` exception → 404.
+- [ ] **I.1.5** `bff/app/main.py`: registrar router; añadir `get_projects_repo` dependency.
+- [ ] **I.1.6** Aggregate status heurístico (sin re-inspect) según §13.5.
+- [ ] **I.1.7** Test manual con curl: GET /projects, GET /projects/backoffice, /projects/(unmanaged) sin/con flag, GET /projects/no-existe → 404.
+
+### I.2 — Frontend: vendor Mermaid + landing list
+
+- [ ] **I.2.1** Vendor `mermaid@10.9.4/dist/mermaid.min.js` → `frontend/assets/mermaid.min.js`. Añadir nota en `frontend/assets/README.md` (versión + checksum SHA-256).
+- [ ] **I.2.2** Inicializar Mermaid en `<head>`: `mermaid.initialize({startOnLoad:false, theme:'neutral', securityLevel:'strict'})`.
+- [ ] **I.2.3** Refactor router hash: añadir rutas `#/`, `#/projects/<name>`, `#/home`. La home antigua US-9 pasa a `#/home`.
+- [ ] **I.2.4** Menú principal actualizado: Projects (default) | Containers | Images | Volumes | Networks | Home.
+- [ ] **I.2.5** Componente `cd.projectsList`: fetch `GET /api/projects`, render cards (name, aggregate_status badge, m/n running, services, networks count). Toggle "Include unmanaged" → re-fetch con `?include_unmanaged=true`.
+- [ ] **I.2.6** Cards: keyboard accessible (role=button, tabindex=0, Enter/Space → navega).
+
+### I.3 — Frontend: Project detail + Topology + tabs Networks/Volumes
+
+- [ ] **I.3.1** Componente `cd.projectDetail`: fetch `GET /api/projects/{name}`. Header con back-link + name + aggregate badge. Tab strip: Overview/Topology/Networks/Volumes.
+- [ ] **I.3.2** Tab **Overview**: tabla de services (mismo estilo que `containersView`), botones inline start/stop/restart (operator+) y remove (admin) que reusan modales `cdConfirmModal`/`cdDeleteModal` existentes.
+- [ ] **I.3.3** Tab **Topology**: contenedor `<div id="cd-graph">`, toolbar con 3 checkboxes (depends_on, networks, volumes) + botón "Re-render". Función `renderGraph(detail, filters)` según §13.6.4.
+- [ ] **I.3.4** Click handlers post-render: cada nodo del SVG navega a `#/containers/<container_id>`.
+- [ ] **I.3.5** Si `services.length > 20` → mostrar warning "Graph disabled — too many nodes" + botón "Render anyway".
+- [ ] **I.3.6** Tab **Networks**: lista accordion `name → services_in[]`. Click en nombre → `#/networks/<name>`.
+- [ ] **I.3.7** Tab **Volumes**: ídem para volumes.
+- [ ] **I.3.8** Containers protected (denylist) muestran badge "🔒 protected" en Overview.
+- [ ] **I.3.9** Cache headers: nginx `expires 30d; immutable;` para `/containers/assets/*` (mermaid grande).
+
+### I.4 — Smoke I
+
+- [ ] **I.4.1** `bff/tests/scripts/smoke-i.sh` con (≥ 8 casos):
+  - I.1: viewer GET /projects → 200, lista no vacía
+  - I.2: viewer GET /projects?include_unmanaged=true → 200, debe haber `(unmanaged)` SI el host tiene containers raw
+  - I.3: viewer GET /projects/backoffice → 200, schema válido (services[], graph.nodes[], graph.edges[])
+  - I.4: viewer GET /projects/no-existe → 404
+  - I.5: timing GET /projects con `--max-time 2` (< 1s p95 informativo)
+  - I.6: GET /projects/backoffice → graph.edges contiene `type=depends_on` Y `type=network` (host real lo tiene)
+  - I.7: anon GET /projects → 401
+  - I.8: ES query: tras los 6 casos previos, ES tiene docs con `original_uri` matching `/containers/api/projects*`
+- [ ] **I.4.2** Ejecutar smoke-i.sh end-to-end con stack levantado, esperar 100% pass.
+- [ ] **I.4.3** Re-ejecutar smoke-{c,d,f,g}.sh para confirmar 0 regresiones.
+
+### I.5 — Docs delta + CI + commit + push
+
+- [ ] **I.5.1** `docs/user-guide.es.md`: nueva sección "§ Projects view" tras §3 (Containers). Incluir mini-Mermaid de ejemplo, screenshot ASCII, runbook R8 "Diagnosticar un proyecto".
+- [ ] **I.5.2** `docs/user-guide.en.md`: mirror.
+- [ ] **I.5.3** `README.md` del sub-stack: actualizar feature matrix con C-P; mencionar Projects landing.
+- [ ] **I.5.4** Root `README.md`: mencionar "Projects view" en el bullet de containers-dashboard.
+- [ ] **I.5.5** CI `.github/workflows/test-dotfiles.yml`: añadir step `bash bff/tests/scripts/smoke-i.sh` en el job `containers-dashboard-smoke` (después de smoke-g).
+- [ ] **I.5.6** `specs/backlog.md` § C: añadir fila Phase I → `feat(containers-dashboard): phase I — projects view`.
+- [ ] **I.5.7** Bumpear versiones: requirements 0.3.0 → 1.0.0 "MVP+I Implemented", design 0.3.0 → 1.0.0 "Reflects Phase I", tasks 1.1.0 → 1.2.0 "Phase I Completed".
+- [ ] **I.5.8** Commit `feat(containers-dashboard): phase I — projects view + topology` autor lglabs.
+- [ ] **I.5.9** `git push origin master`.

@@ -1,6 +1,6 @@
 # Containers Dashboard — Design
 
-> Versión: 0.2.0 · Estado: Reflects implementation · Última actualización: 2026-05-10
+> Versión: 0.3.0 · Estado: Phase I (Projects view) approved · Última actualización: 2026-05-10
 >
 > Este documento define **cómo** se construye el Containers Dashboard. El **qué** está en `requirements.md`. Las decisiones inmutables están en `CONSTITUTION-addendum.md` (que hereda `backoffice/CONSTITUTION.md`).
 >
@@ -814,3 +814,311 @@ deploy:
 ## 12. Trazabilidad inversa
 
 (Se completa al escribir `tasks.md`. Cada task referencia esta sección. Cada US referencia las tasks.)
+
+---
+
+## 13. Projects view (Phase I)
+
+> Adenda a v0.2.0 — añade vista de agrupación por compose project con diagrama de componentes. Cubre **US-10** (`requirements.md` §4).
+
+### 13.1. Discovery: cómo se identifican proyectos
+
+Docker Compose añade automáticamente labels a los containers que crea:
+
+| Label | Significado | Origen |
+|---|---|---|
+| `com.docker.compose.project` | Nombre del proyecto (slug) | nombre del directorio o `--project-name` |
+| `com.docker.compose.service` | Rol del container dentro del proyecto | clave bajo `services:` en compose |
+| `com.docker.compose.depends_on` | CSV de dependencias declaradas | `depends_on:` del compose |
+| `com.docker.compose.config-hash` | Hash del compose merged | usado para detectar drift |
+
+**Discovery:**
+
+1. `docker.containers.list(all=True)` (todos, running + stopped).
+2. Para cada container, leer `Labels["com.docker.compose.project"]`. Si falta → asignar al pseudo-proyecto `(unmanaged)`.
+3. Agrupar por nombre de proyecto.
+4. Por cada proyecto, recolectar (a) services, (b) networks `NetworkSettings.Networks` (unión de todos sus containers), (c) volumes mount-points `Mounts` filtrados a `Type=volume`.
+
+> El daemon NO expone "compose projects" como recurso de primera clase; las labels son la única fuente fiable. Esto es estándar y lo usa Portainer también.
+
+### 13.2. Modelo (Pydantic v2)
+
+```python
+# bff/app/models/projects.py
+
+class ProjectService(BaseModel):
+    name: str            # com.docker.compose.service
+    container: str       # container name (sin /)
+    container_id: str
+    state: str           # running | exited | paused | created | restarting | dead
+    image: str
+    ports: list[str] = []
+    depends_on: list[str] = []   # parseado de label depends_on
+    is_protected: bool = False   # entry en denylist
+
+class ProjectNetwork(BaseModel):
+    name: str
+    services_in: list[str]       # service names
+
+class ProjectVolume(BaseModel):
+    name: str                    # docker volume name
+    services_using: list[str]    # service names que lo montan
+
+class ProjectListItem(BaseModel):
+    name: str
+    services: list[str]          # sólo nombres
+    containers_total: int
+    containers_running: int
+    networks: list[str]          # sólo nombres
+    volumes: list[str]
+    aggregate_status: Literal["up", "degraded", "down", "stopped"]
+    created_at_min: datetime | None
+    created_at_max: datetime | None
+
+class GraphNode(BaseModel):
+    id: str                      # service name (único en el proyecto)
+    label: str                   # display: "service\ncontainer"
+    state: str
+
+class GraphEdge(BaseModel):
+    from_: str = Field(alias="from")
+    to: str
+    type: Literal["depends_on", "network", "volume"]
+    meta: dict = {}              # {"network": "lg-net"} ó {"volume": "vol-name"}
+
+class ProjectDetail(BaseModel):
+    name: str
+    services: list[ProjectService]
+    networks: list[ProjectNetwork]
+    volumes: list[ProjectVolume]
+    graph: dict[str, list]       # {"nodes": [...], "edges": [...]}
+```
+
+### 13.3. Repositorio: `ProjectsRepo`
+
+```python
+# bff/app/repos/projects_repo.py
+
+class ProjectsRepo:
+    def __init__(self, docker_repo: DockerRepo): ...
+
+    def list_projects(self, include_unmanaged: bool = False) -> list[ProjectListItem]:
+        """Agrupa todos los containers por label compose.project."""
+
+    def get_project(self, name: str) -> ProjectDetail:
+        """
+        Para name='(unmanaged)': agrupa containers sin label.
+        Para cualquier otro: filtra por label.
+        Construye services, networks (unión), volumes (unión), y el grafo.
+        Lanza ProjectNotFound si no hay containers que matcheen.
+        """
+
+    def _build_graph(self, services, networks, volumes) -> dict:
+        """
+        Aristas:
+          - depends_on: una por cada entry de label compose.depends_on
+            (csv parsing). Tipo='depends_on'.
+          - network: para cada network del proyecto, una clique parcial
+            (NO clique completa para evitar O(n²)): edge entre service[0] y
+            cada otro service en esa network. Tipo='network', meta.network=name.
+            Si la network es 'bridge' default, se SKIP (ruido).
+          - volume: para cada volume usado por >=2 services, edge entre
+            el primer service y los demás. Tipo='volume', meta.volume=name.
+        Dedupe: una sola edge por (from, to, type, meta) ignorando dirección
+        para network/volume; respetando dirección para depends_on.
+        """
+```
+
+> **Decisión de diseño** (AD-13.1): para co-network/co-volume usamos "star pattern" (service[0] como hub) en vez de clique completa. Razón: clique para 10 services con 1 network = 45 aristas, ilegible. Star = 9 aristas, comprensible. El usuario ve "todos pegados a la misma network" igual de claro.
+
+### 13.4. Router: `/api/projects`
+
+```python
+# bff/app/routers/projects.py
+
+router = APIRouter(prefix="/projects", tags=["projects"])
+
+@router.get("", response_model=list[ProjectListItem])
+def list_projects(
+    include_unmanaged: bool = Query(False),
+    repo: ProjectsRepo = Depends(get_projects_repo),
+    user = Depends(require_any_role)
+):
+    return repo.list_projects(include_unmanaged=include_unmanaged)
+
+@router.get("/{name}", response_model=ProjectDetail)
+def get_project(
+    name: str,
+    repo: ProjectsRepo = Depends(get_projects_repo),
+    user = Depends(require_any_role)
+):
+    try:
+        return repo.get_project(name)
+    except ProjectNotFound:
+        raise HTTPException(404, f"Project '{name}' not found")
+```
+
+> **Read-only**: 0 mutations en `/api/projects/*`. Las acciones (start/stop/restart/remove) reutilizan los routers existentes desde el frontend (mismo backend, misma RBAC, misma audit).
+
+### 13.5. Aggregate status (cálculo)
+
+```python
+def _aggregate(services: list[ProjectService]) -> str:
+    states = {s.state for s in services}
+    running = sum(1 for s in services if s.state == "running")
+    total = len(services)
+    if running == total:
+        return "up"
+    if running == 0:
+        # any exited with non-zero? → down; else stopped
+        # NOTE: docker-py exposes ExitCode via inspect; en list_projects
+        # no lo refetcheamos para no penalizar p95. Heuristic:
+        # si 'dead' o 'restarting' → down; else stopped.
+        if {"dead", "restarting"} & states:
+            return "down"
+        return "stopped"
+    return "degraded"
+```
+
+### 13.6. Frontend
+
+#### 13.6.1. Routing (hash-based, ya en uso)
+
+| Ruta | Vista |
+|---|---|
+| `#/` | **Projects list (NEW landing)** |
+| `#/projects/<name>` | Project detail (Overview/Topology/Networks/Volumes tabs) |
+| `#/home` | Daemon home (US-9 — antes era `/`) |
+| `#/containers`, `#/images`, `#/volumes`, `#/networks` | sin cambios |
+| `#/containers/<id>` | sin cambios (los nodos del grafo enlazan aquí) |
+
+#### 13.6.2. Estructura UI — Project list
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Projects                       [+] include unmanaged   │
+├────────────────────────────────────────────────────────┤
+│ ┌────────────┐ ┌────────────┐ ┌────────────┐           │
+│ │ backoffice │ │ kafka      │ │ elk        │           │
+│ │ 🟢 up      │ │ 🟡 degraded│ │ 🟢 up      │           │
+│ │ 6/6 running│ │ 3/4 running│ │ 4/4 running│           │
+│ │ 6 services │ │ 4 services │ │ 4 services │           │
+│ │ 2 networks │ │ 1 network  │ │ 1 network  │           │
+│ └────────────┘ └────────────┘ └────────────┘           │
+└────────────────────────────────────────────────────────┘
+```
+
+Card click → `#/projects/<name>`. Card es plenamente keyboard-accessible (role=button, tabindex, Enter/Space).
+
+#### 13.6.3. Project detail — tabs
+
+```
+< Back to Projects     backoffice            🟢 up
+─────────────────────────────────────────────────────────
+[ Overview ] [ Topology ] [ Networks ] [ Volumes ]
+```
+
+- **Overview**: tabla de services (=mismo formato de la lista plana de containers, sin paginación), con acciones inline (start/stop/restart/remove) que reutilizan los modales y endpoints existentes (`/api/containers/<ref>/{start,stop,restart}`).
+- **Topology**: contenedor `<div id="cd-graph">` donde se inyecta el código Mermaid generado, más una toolbar de filtros:
+
+  ```
+  ☑ depends_on   ☑ networks   ☑ volumes        [Re-render]
+  ```
+
+- **Networks**: lista accordion de networks con qué services participan; click en network name → `#/networks/<name>`.
+- **Volumes**: ídem para volumes; click → `#/volumes/<name>`.
+
+#### 13.6.4. Mermaid render
+
+```javascript
+// frontend/index.html (Alpine component cd.projectDetail)
+async render(detail, filters) {
+  const lines = ['graph LR'];
+  // Nodos
+  for (const s of detail.services) {
+    const colorClass = {
+      running: 'cdRunning',
+      exited:  'cdExited',
+      paused:  'cdPaused',
+    }[s.state] || 'cdOther';
+    lines.push(`  ${s.id}["${s.name}<br/>${s.container}"]:::${colorClass}`);
+  }
+  // Edges
+  for (const e of detail.graph.edges) {
+    if (!filters[e.type]) continue;
+    const arrow = {
+      depends_on: '-->',           // sólido
+      network:    '-.-',            // punteado
+      volume:     '===',            // grueso/doble
+    }[e.type];
+    const label = e.type === 'network' ? `|${e.meta.network}|`
+                : e.type === 'volume'  ? `|${e.meta.volume}|`
+                : '';
+    lines.push(`  ${e.from} ${arrow}${label} ${e.to}`);
+  }
+  // Class definitions
+  lines.push('  classDef cdRunning fill:#bbf7d0,stroke:#16a34a;');
+  lines.push('  classDef cdExited  fill:#fecaca,stroke:#dc2626;');
+  lines.push('  classDef cdPaused  fill:#fde68a,stroke:#d97706;');
+  lines.push('  classDef cdOther   fill:#e5e7eb,stroke:#6b7280;');
+  const code = lines.join('\n');
+  const { svg } = await mermaid.render('cd-graph-svg', code);
+  document.getElementById('cd-graph').innerHTML = svg;
+  // Click handlers post-render
+  document.querySelectorAll('#cd-graph .node').forEach(node => {
+    node.style.cursor = 'pointer';
+    node.addEventListener('click', () => {
+      const id = node.id.replace(/^flowchart-/, '').split('-')[0];
+      const svc = detail.services.find(s => s.id === id);
+      if (svc) location.hash = `#/containers/${svc.container_id}`;
+    });
+  });
+}
+```
+
+> **Decisión** (AD-13.2): Mermaid client-side, NO server-side rendering. Razón: server no necesita Node; el grafo cambia con filtros sin refetch.
+
+### 13.7. Vendoreo de Mermaid 10
+
+- Archivo: `frontend/assets/mermaid.min.js` (versión `10.9.4`, ~2.8MB → gzip nginx ~750KB).
+- Source: `https://cdn.jsdelivr.net/npm/mermaid@10.9.4/dist/mermaid.min.js`.
+- Inicialización: `mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'strict' })`.
+- `securityLevel: 'strict'` impide ejecución de HTML/JS en labels (los nombres de service vienen de Docker; aunque ya están sanitizados, defensa en profundidad).
+
+### 13.8. Audit
+
+- `GET /api/projects` → audit middleware emite evento estándar (igual que cualquier GET). `event` derivado del path.
+- `GET /api/projects/{name}` → ídem.
+- Mutations seguidas desde el detail page emiten audit con su evento original (`container.start`, `container.stop`, etc.) — sin cambios de Phase G.
+
+### 13.9. Casos límite
+
+| Caso | Comportamiento |
+|---|---|
+| Containers con label compose.project pero compose.service vacío | service = container name |
+| 2 containers con mismo `compose.service` (replicas) | se listan ambos como entries separados con suffix numérico (`web-1`, `web-2`) |
+| Network `bridge` default | se omite del grafo (ruido) |
+| `compose.depends_on` apunta a service que no existe en el proyecto (orphan) | edge dropped + warn en logs del BFF |
+| Proyecto con 1 solo service | grafo con 1 nodo y 0 aristas |
+| Proyecto vacío (todos containers fueron removed) | desaparece de `list_projects` |
+| `(unmanaged)` con 50 containers | se renderiza pero el grafo se desactiva por defecto (>20 nodes); tab Topology muestra warning "Graph disabled — too many nodes". |
+
+### 13.10. NFR
+
+| NFR | Métrica | Cómo se mide |
+|---|---|---|
+| NFR-10 | `GET /api/projects` < 1s p95 con 30 proyectos / 100 containers | smoke I.5 con timing |
+| NFR-11 | Render Mermaid < 500ms para proyectos ≤ 20 services | benchmark client-side console.time |
+| NFR-12 | Mermaid library cacheable (Cache-Control inmutable nginx) | `expires 30d; immutable;` en location `/containers/assets/` |
+
+### 13.11. Decisiones (Phase I)
+
+| ID | Decisión | Razón |
+|---|---|---|
+| AD-13.1 | Star pattern para co-network/co-volume edges (no clique) | Legibilidad; clique escala O(n²) |
+| AD-13.2 | Mermaid client-side render, librería vendoreada | No introducir Node en runtime |
+| AD-13.3 | Pseudo-proyecto `(unmanaged)` opt-in via query param | Reduce ruido por defecto; cubre 100% del host con 1 toggle |
+| AD-13.4 | Read-only en `/api/projects/*`; mutations vía routers existentes | Reusa RBAC + audit + denylist sin duplicar lógica |
+| AD-13.5 | Projects pasa a ser landing (`#/`) | UX: el usuario quiere ver "qué hay" antes que la lista plana |
+| AD-13.6 | Aggregate status sin re-inspect (heurística sobre `state` de list) | Mantener p95 < 1s; precisión "down vs stopped" no es crítica para UX |
+| AD-13.7 | Network `bridge` default omitida del grafo | Casi todos los containers están ahí; no aporta info |

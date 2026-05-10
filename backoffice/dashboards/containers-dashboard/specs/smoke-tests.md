@@ -461,7 +461,37 @@ bash bff/tests/scripts/smoke-c.sh && \
 bash bff/tests/scripts/smoke-d.sh && \
 bash bff/tests/scripts/smoke-f.sh && \
 bash bff/tests/scripts/smoke-g.sh && \
-echo "✅ Containers Dashboard MVP smoke OK"
+bash bff/tests/scripts/smoke-i.sh && \
+echo "✅ Containers Dashboard MVP+I smoke OK"
 ```
 
-> Smoke E (exec) requiere `wscat` y se ejecuta opcionalmente; los demás cubren ≥ 90% del MVP.
+> Smoke E (exec) requiere `wscat` y se ejecuta opcionalmente; los demás cubren ≥ 90% del MVP+I.
+
+---
+
+## Smoke I — Projects view (Phase I)
+
+**Objetivo:** Verificar el contrato de `/api/projects*` y la integración audit→ELK del nuevo router.
+
+### Casos
+
+| ID | User | Acción | Expected |
+|---|---|---|---|
+| I.1 | viewer | `GET /projects` | 200, body es array no vacío, cada item tiene `name`, `services`, `aggregate_status`, `containers_total`, `containers_running`, `networks`, `volumes` |
+| I.2 | viewer | `GET /projects?include_unmanaged=true` | 200; si el host tiene containers sin label compose, debe aparecer `name="(unmanaged)"` en la lista |
+| I.3 | viewer | `GET /projects/backoffice` | 200, schema completo: `services[]`, `networks[]`, `volumes[]`, `graph.nodes[]` (n ≥ 1), `graph.edges[]` |
+| I.4 | viewer | `GET /projects/no-existe-foobar` | 404 |
+| I.5 | viewer | `GET /projects` con `curl --max-time 2` | termina; informe del tiempo (target NFR-10 < 1s p95) |
+| I.6 | viewer | `GET /projects/backoffice` | `graph.edges` incluye al menos un edge con `type=network`; si el compose tiene `depends_on`, también `type=depends_on` |
+| I.7 | anon  | `GET /projects` | 401 |
+| I.8 | n/a | tras los anteriores, `ES _search backoffice-audit-*` filtrado por `original_uri:/containers/api/projects*` | hits ≥ 6, `audit_source=containers-dashboard-bff` |
+
+### Script
+
+`bff/tests/scripts/smoke-i.sh` — sigue el patrón de smoke-c/d/f/g (sourcing `_lib.sh`, retry helper, ES auth).
+
+### DoD smoke I
+
+- 100% pass con stack `make backoffice-up && make elk-up`.
+- 0 regresiones en smoke-{c,d,f,g}.sh.
+- Sample de body de `/projects` y `/projects/{name}` adjunto al PR para revisión manual del schema.

@@ -1,6 +1,6 @@
 # Containers Dashboard — Requirements
 
-> Versión: 0.2.0 · Estado: MVP Implemented · Última actualización: 2026-05-10
+> Versión: 0.3.0 · Estado: Phase I (Projects view) approved · Última actualización: 2026-05-10
 >
 > Este documento captura **qué** debe hacer el Containers Dashboard. El **cómo** está en `design.md`. Las decisiones inmutables están en `CONSTITUTION-addendum.md` (que hereda `backoffice/CONSTITUTION.md`).
 >
@@ -41,6 +41,7 @@ Matriz completa en `CONSTITUTION-addendum.md` §B6.
 | C-I | Inventario read-only: imágenes, volumes, networks | Must |
 | C-IR | Inventario remove: imágenes, volumes, networks (admin only) | Must |
 | C-H | Home con resumen del daemon (counts + estado) | Should |
+| C-P | Projects view: agrupación por compose project + diagrama de componentes (Phase I) | Should |
 
 Fuera de scope MVP (ver `backlog.md` cuando se cree):
 - Compose stacks (start/down un compose project) → lo cubre Portainer
@@ -205,6 +206,35 @@ Fuera de scope MVP (ver `backlog.md` cuando se cree):
 
 - AC-9.1 · La home `/containers/` muestra: containers totales (con breakdown running/exited/paused), imágenes totales, volumes totales, networks totales, versión del daemon (`docker version`), uso de disco aproximado (suma de sizes de imágenes), y links rápidos a las 4 secciones.
 - AC-9.2 · Si el daemon no responde (timeout 5s), la home muestra banner rojo "Docker daemon unavailable" sin tirar el resto de la UI.
+
+---
+
+### US-10 · Vista Projects (agrupación por compose project) (C-P) **[Phase I]**
+
+**Como** cualquier usuario autenticado
+**quiero** ver los containers agrupados por proyecto Compose con un diagrama de componentes
+**para** entender la topología de cada stack a simple vista, sin tener que leer cada compose.yml.
+
+**Prioridad:** Should
+**Roles:** todos (read-only; las acciones reutilizan US-4/5/6/8 con su matriz RBAC actual).
+
+**Criterios de aceptación:**
+
+- AC-10.1 · `GET /containers/api/projects` devuelve `{projects: [{name, services, containers_total, containers_running, networks: [...], volumes: [...], aggregate_status: "up"|"degraded"|"down"|"stopped", created_at_min, created_at_max}]}`. La agrupación se hace por label `com.docker.compose.project`.
+- AC-10.2 · `GET /containers/api/projects/{name}` devuelve detalle: `{name, services: [{name, container, state, image, ports, depends_on}], networks: [{name, services_in: [...]}], volumes: [{name, services_using: [...]}], graph: {nodes: [{id, label, state}], edges: [{from, to, type: "depends_on"|"network"|"volume", meta}]}}`.
+- AC-10.3 · El proyecto `(unmanaged)` agrupa containers sin label `com.docker.compose.project` y se devuelve sólo si la query incluye `?include_unmanaged=true`. Por defecto está oculto.
+- AC-10.4 · El frontend renderiza el grafo con **Mermaid 10** (`graph LR`): nodos = services, color por estado (running=verde, exited=rojo, paused=ámbar, otros=gris). Aristas de 3 tipos discriminadas visualmente: `depends_on` línea sólida, co-network punteada, volume compartido doble línea.
+- AC-10.5 · El usuario puede ocultar/mostrar cada tipo de arista mediante 3 checkboxes en la cabecera de la tab "Topology"; el grafo se re-renderiza client-side sin refetch.
+- AC-10.6 · Click sobre un nodo del grafo navega a `/containers/#/containers/<container-id>` (detail page existente).
+- AC-10.7 · El **landing** del dashboard `/containers/#/` es la vista Projects (cards). El menú principal incluye `Projects | Containers | Images | Volumes | Networks | Home`. La home (US-9) sigue accesible vía `/containers/#/home`.
+- AC-10.8 · Endpoints `/api/projects*` están **read-only**, requieren autenticación (cualquier rol válido del BackOffice), emiten audit `event=projects.list` y `event=projects.get` (igual que el resto de GET) con `audit_source=containers-dashboard-bff`.
+- AC-10.9 · Si un container del proyecto está en denylist (§7.1), aparece con badge "🔒 protected" en la lista del proyecto y sus mutaciones se bloquean igual que en la vista flat (HTTP 423 desde el BFF — ya implementado en Phases B/D/F).
+- AC-10.10 · La lista de proyectos muestra estado agregado:
+  - `up` 🟢 — todos running
+  - `degraded` 🟡 — al menos 1 running y al menos 1 no-running
+  - `down` 🔴 — ninguno running pero al menos 1 con state `exited` con exit code ≠ 0
+  - `stopped` ⚪ — todos stopped/exited limpios
+- AC-10.11 · NFR: `GET /api/projects` devuelve en < 1s para hosts con hasta 30 proyectos / 100 containers (p95); el grafo se renderiza client-side en < 500ms para proyectos de hasta 20 services.
 
 ---
 
