@@ -428,5 +428,5 @@ Una fase **no se cierra** sin:
 - [x] **I.5.5** CI `.github/workflows/test-dotfiles.yml`: step "Smoke I — Projects view (Phase I)" añadido tras smoke-g.
 - [x] **I.5.6** `specs/backlog.md`: sección "Phase I — Projects view + topology (entregada)" añadida.
 - [x] **I.5.7** Versiones bumpeadas: requirements 1.0.0 (MVP+I Implemented), design 1.0.0 (Reflects Phase I), tasks 1.2.0 (Phase I Completed).
-- [ ] **I.5.8** Commit `feat(containers-dashboard): phase I — projects view + topology` autor lglabs.
-- [ ] **I.5.9** `git push origin master`.
+- [x] **I.5.8** Commit `feat(containers-dashboard): phase I — projects view + topology` autor lglabs (`ae08f94`).
+- [x] **I.5.9** `git push origin master` (4738aa7..ae08f94).
