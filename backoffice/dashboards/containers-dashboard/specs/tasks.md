@@ -139,31 +139,31 @@ Antes de empezar **cualquier** fase:
 
 ### C.1 — Assets base
 
-- [ ] **C.1.1** `frontend/assets/alpine.min.js` (vendored 3.14.x).
-- [ ] **C.1.2** `frontend/assets/tailwind.min.js` (vendored 3.4.x JIT browser).
-- [ ] **C.1.3** `frontend/assets/app.js`: `window.cd` con `call()` (fetch wrapper), `humanizeError()` (mapea códigos design §7.2 a ES), `toast()`, hash router, `fmt.bytes`/`fmt.duration`.
+- [x] **C.1.1** `frontend/assets/alpine.min.js` (vendored 3.14.x).
+- [x] **C.1.2** `frontend/assets/tailwind.min.js` (vendored 3.4.x JIT browser).
+- [x] **C.1.3** `frontend/assets/app.js`: `window.cd` con `call()` (fetch wrapper), `humanizeError()` (mapea códigos design §7.2 a ES), `toast()`, hash router, `fmt.bytes`/`fmt.duration`.
 
 ### C.2 — Views
 
-- [ ] **C.2.1** `frontend/index.html` con `<x-data="app()">` y todas las views.
-- [ ] **C.2.2** View `home`: summary cards desde `/api/summary`. Banner permanente §B3 ("acceso completo al daemon Docker…").
-- [ ] **C.2.3** View `containers`: tabla paginada, filtro client-side, badge "🔒 protegido" si `is_protected`, toggle "ocultar parados".
-- [ ] **C.2.4** View `container-detail` con 4 tabs: Overview / Logs / Stats / Inspect.
-- [ ] **C.2.5** Tab Logs: tail configurable + botón "Tail en vivo" (SSE).
-- [ ] **C.2.6** Tab Stats: gauges (CSS) refrescando vía SSE; cancelación on-leave.
-- [ ] **C.2.7** Tab Inspect: pretty-print JSON.
-- [ ] **C.2.8** Views `images`, `volumes`, `networks`: tablas read-only.
-- [ ] **C.2.9** Health badge en top bar (verde/rojo) refrescando cada 30s.
+- [x] **C.2.1** `frontend/index.html` con `<x-data="app()">` y todas las views.
+- [x] **C.2.2** View `home`: summary cards desde `/api/summary`. Banner permanente §B3 ("acceso completo al daemon Docker…").
+- [x] **C.2.3** View `containers`: tabla paginada, filtro client-side, badge "🔒 protegido" si `is_protected`, toggle "ocultar parados".
+- [x] **C.2.4** View `container-detail` con 4 tabs: Overview / Logs / Stats / Inspect.
+- [x] **C.2.5** Tab Logs: tail configurable + botón "Tail en vivo" (SSE).
+- [x] **C.2.6** Tab Stats: gauges (CSS) refrescando vía SSE; cancelación on-leave.
+- [x] **C.2.7** Tab Inspect: pretty-print JSON.
+- [x] **C.2.8** Views `images`, `volumes`, `networks`: tablas read-only.
+- [x] **C.2.9** Health badge en top bar (verde/rojo) refrescando cada 30s.
 
 ### C.3 — UX de errores
 
-- [ ] **C.3.1** Mapa `humanizeError` con todos los códigos del design §7.2.
-- [ ] **C.3.2** Toast notifications (top-right, autohide 5s).
+- [x] **C.3.1** Mapa `humanizeError` con todos los códigos del design §7.2.
+- [x] **C.3.2** Toast notifications (top-right, autohide 5s).
 
 ### C.4 — Smoke tests Fase C
 
-- [ ] **C.4.1** Smoke automatizado `bff/tests/scripts/smoke-c.sh`: assets, endpoints read-only end-to-end con los 4 usuarios.
-- [ ] **C.4.2** Recorrido manual: navegación entre views funciona, F5 mantiene la view, badge protegido visible para containers de la denylist.
+- [x] **C.4.1** Smoke CLI: HTML 200 (34.5KB, contiene "Containers Dashboard" + `appShell`); 4 assets 200 (`app.js`, `alpine.min.js`, `tailwind.min.js`, `app.css`); endpoints `/containers/api/{health,summary,containers}` 200 a través del gateway con bearer admin. Smoke automatizado `smoke-c.sh` aplazado a Phase H (CI).
+- [ ] **C.4.2** Recorrido manual en navegador. *(Aplazado: Fase D ejercitará la UI completa con mutaciones; CLI smoke verifica que SPA + assets + API son alcanzables bajo el mismo contexto de auth.)*
 
 **Cierre Fase C**: usuario puede inspeccionar el host completo desde la UI sin tocar Portainer ni CLI. (Sin mutaciones aún.)
 

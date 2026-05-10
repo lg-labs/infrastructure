@@ -1,60 +1,724 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Containers Dashboard — lg-labs</title>
-  <link rel="stylesheet" href="./assets/app.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Containers Dashboard · LG Labs</title>
+  <script src="/containers/assets/tailwind.min.js"></script>
+  <script src="/containers/assets/app.js"></script>
+  <script defer src="/containers/assets/alpine.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    pre.logs { background:#0b1020; color:#cbd5e1; padding:.75rem; border-radius:.25rem; font-size:.78rem; line-height:1.35; max-height:60vh; overflow:auto; white-space:pre-wrap; word-break:break-all; }
+    pre.json { background:#0b1020; color:#cbd5e1; padding:.75rem; border-radius:.25rem; font-size:.78rem; line-height:1.35; overflow:auto; }
+    .gauge-bar { height: 8px; border-radius: 9999px; background: #e5e7eb; overflow: hidden; }
+    .gauge-fill { height: 100%; transition: width .35s ease-out; }
+  </style>
 </head>
-<body>
-  <header class="topbar">
-    <h1>📦 Containers Dashboard</h1>
-    <nav>
-      <a href="/">← BackOffice</a>
-      <a href="/portainer/">Portainer</a>
-      <a href="/kafka/">Kafka Dashboard</a>
-    </nav>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" x-data="appShell()" x-init="init()" x-cloak>
+
+  <!-- ============== Top bar ============== -->
+  <header class="bg-slate-800 text-white shadow">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
+      <a href="#/" class="text-lg font-semibold hover:underline">📦 Containers Dashboard</a>
+      <nav class="flex gap-3 text-sm">
+        <a href="#/"           class="hover:underline" :class="route.view==='home' ? 'text-amber-300' : ''">Inicio</a>
+        <a href="#/containers" class="hover:underline" :class="route.view==='containers' || route.view==='container-detail' ? 'text-amber-300' : ''">Containers</a>
+        <a href="#/images"     class="hover:underline" :class="route.view==='images' ? 'text-amber-300' : ''">Images</a>
+        <a href="#/volumes"    class="hover:underline" :class="route.view==='volumes' ? 'text-amber-300' : ''">Volumes</a>
+        <a href="#/networks"   class="hover:underline" :class="route.view==='networks' ? 'text-amber-300' : ''">Networks</a>
+      </nav>
+      <div class="flex-1"></div>
+      <div class="text-sm flex items-center gap-3">
+        <span x-show="health.status==='ok'" class="inline-flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-green-400"></span>
+          <span class="text-slate-300">daemon ok</span>
+        </span>
+        <span x-show="health.status==='degraded'" class="inline-flex items-center gap-1 text-amber-300">
+          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span x-text="`degraded: docker=${health.docker}`"></span>
+        </span>
+        <span class="text-slate-300" x-text="user.user || 'anon'"></span>
+        <span class="text-xs px-2 py-0.5 rounded bg-slate-700" x-text="user.role || '—'"></span>
+        <a href="/" class="text-slate-300 hover:underline">← BackOffice</a>
+      </div>
+    </div>
   </header>
 
-  <main>
-    <div class="banner banner-warning">
-      ⚠️ Este dashboard tiene acceso completo al daemon Docker del host.
-      Acciones destructivas son irreversibles. Containers críticos del BackOffice
-      están protegidos por denylist (HTTP 423 Locked).
-    </div>
+  <!-- Banner permanente §B3 (CONSTITUTION-addendum): self-protection awareness -->
+  <div class="bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 text-center">
+    ⚠️ Este dashboard tiene <strong>acceso completo al daemon Docker del host</strong>. Las acciones destructivas son irreversibles.
+    Los containers críticos del BackOffice están protegidos por denylist (<code class="text-xs">HTTP 423 Locked</code>).
+  </div>
 
-    <section>
-      <h2>🚧 En construcción — Fase A: Andamiaje</h2>
-      <p>
-        Este sub-dashboard está en desarrollo activo siguiendo el flujo Spec-Driven.
-        Las specs viven en
-        <code>backoffice/dashboards/containers-dashboard/specs/</code>.
-      </p>
-      <p>Fases:</p>
-      <ul>
-        <li>✅ Fase 0 — SDD specs</li>
-        <li>🚧 <strong>Fase A — Andamiaje (esta fase)</strong></li>
-        <li>⏳ Fase B — BFF read-only</li>
-        <li>⏳ Fase C — Frontend SPA</li>
-        <li>⏳ Fase D — start/stop/restart</li>
-        <li>⏳ Fase E — Exec shell</li>
-        <li>⏳ Fase F — Remove</li>
-        <li>⏳ Fase G — Audit pipeline E2E</li>
-        <li>⏳ Fase H — Docs + CI</li>
-      </ul>
+  <!-- Banner if degraded -->
+  <div x-show="health.status==='degraded'" class="bg-red-100 border-b border-red-300 text-red-900 text-sm px-4 py-2 text-center">
+    Estado degradado · docker=<strong x-text="health.docker"></strong> · sqlite=<strong x-text="health.sqlite"></strong>. Algunas operaciones pueden fallar.
+  </div>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+
+    <!-- ============== HOME VIEW (summary) ============== -->
+    <section x-show="route.view==='home'" x-data="homeView()" x-init="load()" class="space-y-6">
+      <h1 class="text-2xl font-semibold">Resumen del host</h1>
+      <div x-show="loading" class="text-slate-500">Cargando…</div>
+
+      <div x-show="!loading && summary" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <a href="#/containers" class="bg-white rounded shadow p-4 hover:bg-slate-50">
+          <div class="text-xs text-slate-500 uppercase">Containers</div>
+          <div class="text-3xl font-semibold mt-1" x-text="summary?.containers?.total"></div>
+          <div class="text-xs text-slate-500 mt-1">
+            <span class="text-green-600" x-text="`${summary?.containers?.running} running`"></span> ·
+            <span class="text-slate-500" x-text="`${summary?.containers?.exited} exited`"></span>
+          </div>
+        </a>
+        <a href="#/images" class="bg-white rounded shadow p-4 hover:bg-slate-50">
+          <div class="text-xs text-slate-500 uppercase">Images</div>
+          <div class="text-3xl font-semibold mt-1" x-text="summary?.images_total"></div>
+          <div class="text-xs text-slate-500 mt-1" x-text="`${summary?.images_size_mb?.toFixed?.(0) || '0'} MB total`"></div>
+        </a>
+        <a href="#/volumes" class="bg-white rounded shadow p-4 hover:bg-slate-50">
+          <div class="text-xs text-slate-500 uppercase">Volumes</div>
+          <div class="text-3xl font-semibold mt-1" x-text="summary?.volumes_total"></div>
+        </a>
+        <a href="#/networks" class="bg-white rounded shadow p-4 hover:bg-slate-50">
+          <div class="text-xs text-slate-500 uppercase">Networks</div>
+          <div class="text-3xl font-semibold mt-1" x-text="summary?.networks_total"></div>
+        </a>
+      </div>
+
+      <div x-show="!loading && summary" class="bg-white rounded shadow p-4">
+        <h2 class="text-sm font-semibold uppercase text-slate-500 mb-2">Daemon</h2>
+        <div class="flex gap-6 text-sm">
+          <div>Versión: <strong x-text="summary?.daemon_version || '—'"></strong></div>
+          <div>API: <strong x-text="summary?.daemon_api_version || '—'"></strong></div>
+        </div>
+        <div class="flex gap-4 text-sm mt-3">
+          <template x-for="(state, name) in summary?.components || {}" :key="name">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full" :class="state==='ok' ? 'bg-green-500' : 'bg-amber-500'"></span>
+              <span x-text="`${name}: ${state}`"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div x-show="!loading" class="bg-amber-50 border border-amber-200 rounded p-4 text-sm">
+        <strong>Auto-protección:</strong> los containers <code class="bg-white px-1 rounded">keycloak</code>, <code class="bg-white px-1 rounded">gateway</code>,
+        <code class="bg-white px-1 rounded">proxy</code>, <code class="bg-white px-1 rounded">portainer</code> y este propio dashboard
+        (<code class="bg-white px-1 rounded">containers-dashboard-bff/fe</code>) están en la <strong>denylist</strong> hard-coded del BFF.
+        Cualquier intento de pararlos/borrarlos desde aquí responde 423 Locked.
+      </div>
     </section>
 
-    <section>
-      <h2>Health BFF</h2>
-      <pre id="health">cargando…</pre>
+    <!-- ============== CONTAINERS LIST ============== -->
+    <section x-show="route.view==='containers'" x-data="containersView()" x-init="load()" class="space-y-4">
+      <div class="flex items-center gap-3 flex-wrap">
+        <h1 class="text-2xl font-semibold">Containers</h1>
+        <span class="text-sm text-slate-500" x-text="`(${total} total · ${visible.length} visibles)`"></span>
+        <div class="flex-1"></div>
+        <input type="search" x-model="search" @input.debounce.250ms="" placeholder="Buscar nombre/imagen…"
+               class="px-3 py-1.5 border rounded text-sm w-56" />
+        <label class="text-sm flex items-center gap-1">
+          <input type="checkbox" x-model="hideStopped" />
+          ocultar parados
+        </label>
+        <button @click="load()" class="bg-slate-200 hover:bg-slate-300 text-sm px-3 py-1.5 rounded">↻ Refrescar</button>
+      </div>
+
+      <div x-show="loading" class="text-slate-500">Cargando…</div>
+
+      <div x-show="!loading" class="bg-white rounded shadow overflow-hidden">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600 text-left">
+            <tr>
+              <th class="px-3 py-2 w-20">State</th>
+              <th class="px-3 py-2">Nombre</th>
+              <th class="px-3 py-2">Image</th>
+              <th class="px-3 py-2 w-32">Project</th>
+              <th class="px-3 py-2 w-32">Ports</th>
+              <th class="px-3 py-2 w-16"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="c in visible" :key="c.id">
+              <tr class="border-t hover:bg-slate-50 cursor-pointer" @click="goDetail(c)">
+                <td class="px-3 py-2">
+                  <span class="inline-block px-2 py-0.5 text-xs rounded"
+                        :class="stateClass(c.state)" x-text="c.state"></span>
+                </td>
+                <td class="px-3 py-2 font-mono text-xs">
+                  <span x-text="c.name"></span>
+                  <span x-show="c.is_protected" class="ml-1 text-amber-600" title="Protegido por denylist">🔒</span>
+                </td>
+                <td class="px-3 py-2 text-slate-600 text-xs" x-text="c.image"></td>
+                <td class="px-3 py-2 text-slate-500 text-xs" x-text="c.compose_project || '—'"></td>
+                <td class="px-3 py-2 text-slate-500 text-xs" x-text="formatPorts(c.ports)"></td>
+                <td class="px-3 py-2 text-right">
+                  <a :href="`#/containers/${encodeURIComponent(c.id_short)}`" class="text-blue-600 hover:underline">→</a>
+                </td>
+              </tr>
+            </template>
+            <tr x-show="!loading && visible.length===0">
+              <td colspan="6" class="px-3 py-4 text-center text-slate-500">Sin resultados</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
+
+    <!-- ============== CONTAINER DETAIL ============== -->
+    <section x-show="route.view==='container-detail'" x-data="containerDetailView()" x-init="load()" class="space-y-4">
+      <div class="flex items-center gap-3">
+        <a href="#/containers" class="text-blue-600 hover:underline text-sm">← Volver</a>
+        <h1 class="text-2xl font-semibold flex items-center gap-2">
+          <span x-text="detail?.name || route.id"></span>
+          <span x-show="detail?.is_protected" class="text-amber-600 text-base" title="Protegido por denylist">🔒 protegido</span>
+        </h1>
+        <span x-show="detail" class="px-2 py-0.5 text-xs rounded" :class="stateClass(detail?.state)" x-text="detail?.state"></span>
+      </div>
+
+      <div x-show="loading" class="text-slate-500">Cargando…</div>
+
+      <div x-show="!loading && detail" class="bg-white rounded shadow">
+        <!-- Tabs -->
+        <div class="border-b flex">
+          <template x-for="t in tabs" :key="t.id">
+            <button @click="setTab(t.id)" class="px-4 py-2 text-sm border-b-2 -mb-px"
+                    :class="route.tab===t.id ? 'border-blue-500 text-blue-600 font-medium' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                    x-text="t.label"></button>
+          </template>
+        </div>
+
+        <!-- Tab: Overview -->
+        <div x-show="route.tab==='overview'" class="p-4 space-y-4 text-sm">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div class="text-xs uppercase text-slate-500">ID</div>
+              <div class="font-mono text-xs" x-text="detail?.id"></div>
+            </div>
+            <div>
+              <div class="text-xs uppercase text-slate-500">Image</div>
+              <div class="font-mono text-xs" x-text="detail?.image"></div>
+            </div>
+            <div>
+              <div class="text-xs uppercase text-slate-500">Status</div>
+              <div x-text="detail?.status || '—'"></div>
+            </div>
+            <div>
+              <div class="text-xs uppercase text-slate-500">Compose</div>
+              <div x-text="detail?.compose_project ? `${detail.compose_project} / ${detail.compose_service}` : '—'"></div>
+            </div>
+            <div>
+              <div class="text-xs uppercase text-slate-500">Restart policy</div>
+              <div x-text="detail?.restart_policy?.name || '—'"></div>
+            </div>
+            <div>
+              <div class="text-xs uppercase text-slate-500">Health</div>
+              <div x-show="detail?.health" x-text="detail?.health?.status + (detail?.health?.failing_streak ? ` (failing ${detail.health.failing_streak})` : '')"></div>
+              <div x-show="!detail?.health" class="text-slate-400">— sin healthcheck —</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs uppercase text-slate-500 mb-1">Networks</div>
+            <table class="text-xs w-full">
+              <thead class="bg-slate-50 text-slate-600 text-left">
+                <tr><th class="px-2 py-1">Name</th><th class="px-2 py-1">IP</th><th class="px-2 py-1">MAC</th></tr>
+              </thead>
+              <tbody>
+                <template x-for="n in detail?.networks || []" :key="n.name">
+                  <tr class="border-t">
+                    <td class="px-2 py-1 font-mono" x-text="n.name"></td>
+                    <td class="px-2 py-1 font-mono" x-text="n.ip || '—'"></td>
+                    <td class="px-2 py-1 font-mono" x-text="n.mac || '—'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <div class="text-xs uppercase text-slate-500 mb-1">Mounts</div>
+            <table class="text-xs w-full">
+              <thead class="bg-slate-50 text-slate-600 text-left">
+                <tr><th class="px-2 py-1 w-16">Type</th><th class="px-2 py-1">Source</th><th class="px-2 py-1">Target</th><th class="px-2 py-1 w-12">Mode</th></tr>
+              </thead>
+              <tbody>
+                <template x-for="m in detail?.mounts || []" :key="`${m.source}->${m.target}`">
+                  <tr class="border-t">
+                    <td class="px-2 py-1" x-text="m.type"></td>
+                    <td class="px-2 py-1 font-mono break-all" x-text="m.source"></td>
+                    <td class="px-2 py-1 font-mono break-all" x-text="m.target"></td>
+                    <td class="px-2 py-1" x-text="m.mode"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <div class="text-xs uppercase text-slate-500 mb-1">
+              Environment <span class="text-slate-400 normal-case">(secretos redactados server-side)</span>
+            </div>
+            <table class="text-xs w-full">
+              <tbody>
+                <template x-for="e in detail?.env || []" :key="e.key">
+                  <tr class="border-t">
+                    <td class="px-2 py-1 font-mono w-1/3" x-text="e.key"></td>
+                    <td class="px-2 py-1 font-mono break-all" :class="e.value === '<redacted>' ? 'text-amber-600' : ''" x-text="e.value"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab: Logs -->
+        <div x-show="route.tab==='logs'" class="p-4 space-y-3 text-sm">
+          <div class="flex items-center gap-3">
+            <label>Tail:
+              <select x-model.number="logsTail" @change="reloadLogs()" class="border rounded px-2 py-1 text-sm">
+                <option :value="100">100</option>
+                <option :value="500">500</option>
+                <option :value="1000">1000</option>
+                <option :value="2000">2000</option>
+              </select>
+            </label>
+            <button @click="reloadLogs()" class="bg-slate-200 hover:bg-slate-300 px-3 py-1 rounded">↻ Recargar</button>
+            <button x-show="!streaming" @click="startStream()" class="bg-blue-600 text-white hover:bg-blue-700 px-3 py-1 rounded">▶ Tail en vivo</button>
+            <button x-show="streaming"  @click="stopStream()"  class="bg-red-600 text-white hover:bg-red-700 px-3 py-1 rounded">■ Parar</button>
+            <span x-show="streaming" class="text-blue-600 text-xs animate-pulse">● en vivo</span>
+          </div>
+          <pre class="logs" x-text="logs.length ? logs.join('\n') : '— sin logs —'"></pre>
+        </div>
+
+        <!-- Tab: Stats -->
+        <div x-show="route.tab==='stats'" class="p-4 space-y-4 text-sm">
+          <div x-show="!stats || stats.unavailable" class="text-slate-500">
+            <span x-show="!stats">Conectando…</span>
+            <span x-show="stats?.unavailable">Container no está corriendo: stats no disponibles.</span>
+          </div>
+          <div x-show="stats && !stats.unavailable" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-slate-50 rounded p-3">
+              <div class="text-xs uppercase text-slate-500">CPU</div>
+              <div class="text-2xl font-semibold mt-1" x-text="cd.fmt.pct(stats?.cpu_percent)"></div>
+              <div class="gauge-bar mt-2"><div class="gauge-fill bg-blue-500" :style="`width: ${Math.min(100, stats?.cpu_percent || 0)}%`"></div></div>
+            </div>
+            <div class="bg-slate-50 rounded p-3">
+              <div class="text-xs uppercase text-slate-500">Memoria</div>
+              <div class="text-2xl font-semibold mt-1">
+                <span x-text="cd.fmt.mb(stats?.memory_usage_mb)"></span>
+                <span class="text-sm text-slate-500" x-text="`/ ${cd.fmt.mb(stats?.memory_limit_mb)}`"></span>
+              </div>
+              <div class="gauge-bar mt-2">
+                <div class="gauge-fill bg-emerald-500"
+                     :style="`width: ${stats?.memory_limit_mb ? Math.min(100, 100*(stats.memory_usage_mb/stats.memory_limit_mb)) : 0}%`"></div>
+              </div>
+            </div>
+            <div class="bg-slate-50 rounded p-3">
+              <div class="text-xs uppercase text-slate-500">Network</div>
+              <div class="text-sm mt-1">
+                ↓ <strong x-text="`${stats?.net_rx_kbps?.toFixed(1)} KB/s`"></strong>
+                · ↑ <strong x-text="`${stats?.net_tx_kbps?.toFixed(1)} KB/s`"></strong>
+              </div>
+            </div>
+            <div class="bg-slate-50 rounded p-3">
+              <div class="text-xs uppercase text-slate-500">Block I/O (acumulado)</div>
+              <div class="text-sm mt-1">
+                R <strong x-text="cd.fmt.mb(stats?.block_read_mb)"></strong>
+                · W <strong x-text="cd.fmt.mb(stats?.block_write_mb)"></strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Inspect -->
+        <div x-show="route.tab==='inspect'" class="p-4 space-y-3 text-sm">
+          <div class="flex items-center gap-3">
+            <button @click="loadInspect()" class="bg-slate-200 hover:bg-slate-300 px-3 py-1 rounded">↻ Recargar</button>
+            <span class="text-slate-500 text-xs">Output crudo de <code>docker inspect</code> con env redactado.</span>
+          </div>
+          <pre class="json" x-text="inspectJson || '— pulsa recargar —'"></pre>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============== IMAGES ============== -->
+    <section x-show="route.view==='images'" x-data="imagesView()" x-init="load()" class="space-y-4">
+      <div class="flex items-center gap-3">
+        <h1 class="text-2xl font-semibold">Images</h1>
+        <span class="text-sm text-slate-500" x-text="`(${total} total)`"></span>
+        <div class="flex-1"></div>
+        <button @click="load()" class="bg-slate-200 hover:bg-slate-300 text-sm px-3 py-1.5 rounded">↻ Refrescar</button>
+      </div>
+      <div x-show="loading" class="text-slate-500">Cargando…</div>
+      <div x-show="!loading" class="bg-white rounded shadow overflow-hidden">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600 text-left">
+            <tr>
+              <th class="px-3 py-2">Repository</th>
+              <th class="px-3 py-2 w-32">Tag</th>
+              <th class="px-3 py-2 w-28">ID</th>
+              <th class="px-3 py-2 w-24 text-right">Size</th>
+              <th class="px-3 py-2 w-20 text-right">Used</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="img in items" :key="img.id + ':' + img.tag">
+              <tr class="border-t">
+                <td class="px-3 py-2 font-mono text-xs" x-text="img.repository || '<none>'"></td>
+                <td class="px-3 py-2 font-mono text-xs" x-text="img.tag || '<none>'"></td>
+                <td class="px-3 py-2 font-mono text-xs text-slate-500" x-text="img.id_short"></td>
+                <td class="px-3 py-2 text-right" x-text="cd.fmt.mb(img.size_mb)"></td>
+                <td class="px-3 py-2 text-right" :class="img.containers_using > 0 ? 'text-emerald-700 font-medium' : 'text-slate-400'" x-text="img.containers_using"></td>
+              </tr>
+            </template>
+            <tr x-show="!loading && items.length===0"><td colspan="5" class="px-3 py-4 text-center text-slate-500">Sin imágenes</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============== VOLUMES ============== -->
+    <section x-show="route.view==='volumes'" x-data="volumesView()" x-init="load()" class="space-y-4">
+      <div class="flex items-center gap-3">
+        <h1 class="text-2xl font-semibold">Volumes</h1>
+        <span class="text-sm text-slate-500" x-text="`(${total} total)`"></span>
+        <div class="flex-1"></div>
+        <button @click="load()" class="bg-slate-200 hover:bg-slate-300 text-sm px-3 py-1.5 rounded">↻ Refrescar</button>
+      </div>
+      <div x-show="loading" class="text-slate-500">Cargando…</div>
+      <div x-show="!loading" class="bg-white rounded shadow overflow-hidden">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600 text-left">
+            <tr>
+              <th class="px-3 py-2">Name</th>
+              <th class="px-3 py-2 w-24">Driver</th>
+              <th class="px-3 py-2">Mountpoint</th>
+              <th class="px-3 py-2 w-20 text-right">Used</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="v in items" :key="v.name">
+              <tr class="border-t">
+                <td class="px-3 py-2 font-mono text-xs" x-text="v.name"></td>
+                <td class="px-3 py-2 text-xs" x-text="v.driver"></td>
+                <td class="px-3 py-2 font-mono text-xs text-slate-500 break-all" x-text="v.mountpoint"></td>
+                <td class="px-3 py-2 text-right" :class="v.containers_using > 0 ? 'text-emerald-700 font-medium' : 'text-slate-400'" x-text="v.containers_using"></td>
+              </tr>
+            </template>
+            <tr x-show="!loading && items.length===0"><td colspan="4" class="px-3 py-4 text-center text-slate-500">Sin volúmenes</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============== NETWORKS ============== -->
+    <section x-show="route.view==='networks'" x-data="networksView()" x-init="load()" class="space-y-4">
+      <div class="flex items-center gap-3">
+        <h1 class="text-2xl font-semibold">Networks</h1>
+        <span class="text-sm text-slate-500" x-text="`(${total} total)`"></span>
+        <div class="flex-1"></div>
+        <button @click="load()" class="bg-slate-200 hover:bg-slate-300 text-sm px-3 py-1.5 rounded">↻ Refrescar</button>
+      </div>
+      <div x-show="loading" class="text-slate-500">Cargando…</div>
+      <div x-show="!loading" class="bg-white rounded shadow overflow-hidden">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600 text-left">
+            <tr>
+              <th class="px-3 py-2">Name</th>
+              <th class="px-3 py-2 w-24">Driver</th>
+              <th class="px-3 py-2 w-20">Scope</th>
+              <th class="px-3 py-2 w-20 text-center">Internal</th>
+              <th class="px-3 py-2 w-24 text-right">Containers</th>
+              <th class="px-3 py-2 w-20"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="n in items" :key="n.id">
+              <tr class="border-t">
+                <td class="px-3 py-2 font-mono text-xs">
+                  <span x-text="n.name"></span>
+                  <span x-show="n.is_builtin" class="ml-1 text-amber-600 text-xs" title="Red built-in (no se puede borrar)">🔒</span>
+                </td>
+                <td class="px-3 py-2 text-xs" x-text="n.driver"></td>
+                <td class="px-3 py-2 text-xs" x-text="n.scope"></td>
+                <td class="px-3 py-2 text-center text-xs" x-text="n.internal ? 'sí' : 'no'"></td>
+                <td class="px-3 py-2 text-right" :class="n.containers_attached > 0 ? 'text-emerald-700 font-medium' : 'text-slate-400'" x-text="n.containers_attached"></td>
+                <td class="px-3 py-2 font-mono text-xs text-slate-500" x-text="n.id_short"></td>
+              </tr>
+            </template>
+            <tr x-show="!loading && items.length===0"><td colspan="6" class="px-3 py-4 text-center text-slate-500">Sin redes</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
   </main>
 
+  <footer class="text-xs text-slate-500 text-center py-3">
+    LG Labs · BackOffice · Containers Dashboard v0.1.0
+  </footer>
+
+  <!-- ============== Alpine components ============== -->
   <script>
-    fetch('./api/health')
-      .then(r => r.json())
-      .then(j => document.getElementById('health').textContent = JSON.stringify(j, null, 2))
-      .catch(e => document.getElementById('health').textContent = 'error: ' + e);
+    // App shell — global state, hash router, periodic health, identity from headers (best-effort).
+    function appShell() {
+      return {
+        route: { view: "home" },
+        user:  { user: "", groups: [], role: "" },
+        health: { status: "ok", docker: "ok", sqlite: "ok" },
+        healthTimer: null,
+        async init() {
+          this.route = cd.parseHash();
+          window.addEventListener("hashchange", () => { this.route = cd.parseHash(); });
+
+          // No JS-readable identity from oauth2-proxy in this stack — rely on the audit
+          // headers the gateway forwards to BFF, but the browser doesn't see them.
+          // Best-effort: use /oauth2/userinfo if available (BackOffice exposes it).
+          try {
+            const r = await fetch("/oauth2/userinfo", { credentials: "same-origin" });
+            if (r.ok) {
+              const j = await r.json();
+              const groups = j.groups || (j.preferredUsername ? [] : []);
+              this.user = {
+                user: j.preferredUsername || j.user || j.email || "",
+                groups,
+                role: this._pickRole(j.groups || []),
+              };
+            }
+          } catch { /* ignore */ }
+
+          await this._refreshHealth();
+          this.healthTimer = setInterval(() => this._refreshHealth(), 30000);
+        },
+        _pickRole(groups) {
+          const order = ["admin", "operator", "support", "viewer"];
+          for (const g of order) if (groups.includes(g)) return g;
+          return "";
+        },
+        async _refreshHealth() {
+          try {
+            const h = await cd.call("GET", "/health");
+            this.health = h;
+          } catch (e) {
+            this.health = { status: "degraded", docker: "unavailable", sqlite: "unavailable" };
+          }
+        },
+      };
+    }
+
+    // ----- Home view -----
+    function homeView() {
+      return {
+        loading: true,
+        summary: null,
+        async load() {
+          this.loading = true;
+          try {
+            this.summary = await cd.call("GET", "/summary");
+          } catch (e) {
+            cd.toast("error", e.message);
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+
+    // ----- Containers list -----
+    function containersView() {
+      return {
+        loading: true,
+        all: [],
+        total: 0,
+        search: "",
+        hideStopped: false,
+        get visible() {
+          let xs = this.all;
+          if (this.hideStopped) xs = xs.filter(c => c.state === "running");
+          if (this.search.trim()) {
+            const q = this.search.trim().toLowerCase();
+            xs = xs.filter(c =>
+              (c.name||"").toLowerCase().includes(q) ||
+              (c.image||"").toLowerCase().includes(q) ||
+              (c.id_short||"").toLowerCase().includes(q)
+            );
+          }
+          return xs;
+        },
+        async load() {
+          this.loading = true;
+          try {
+            const page = await cd.call("GET", "/containers?include_stopped=true&page_size=500");
+            this.all = page.items;
+            this.total = page.total;
+          } catch (e) {
+            cd.toast("error", e.message);
+          } finally {
+            this.loading = false;
+          }
+        },
+        stateClass(s) {
+          return ({
+            running:    "bg-green-100 text-green-800",
+            exited:     "bg-slate-200 text-slate-700",
+            paused:     "bg-amber-100 text-amber-800",
+            restarting: "bg-blue-100 text-blue-800",
+            created:    "bg-slate-100 text-slate-600",
+            dead:       "bg-red-100 text-red-800",
+            removing:   "bg-purple-100 text-purple-700",
+          }[s] || "bg-slate-100 text-slate-700");
+        },
+        formatPorts(ports) {
+          if (!ports || !ports.length) return "—";
+          return ports.slice(0, 3).map(p => p.public ? `${p.public}→${p.private}` : `${p.private}/${p.type}`).join(", ") +
+                 (ports.length > 3 ? ` +${ports.length - 3}` : "");
+        },
+        goDetail(c) { location.hash = `#/containers/${encodeURIComponent(c.id_short)}`; },
+      };
+    }
+
+    // ----- Container detail -----
+    function containerDetailView() {
+      return {
+        loading: true,
+        detail: null,
+        // Logs
+        logsTail: 500,
+        logs: [],
+        streaming: false,
+        es: null,
+        // Stats
+        stats: null,
+        statsEs: null,
+        // Inspect
+        inspectJson: "",
+        get route() { return cd.parseHash(); },
+        tabs: [
+          { id: "overview", label: "Overview" },
+          { id: "logs",     label: "Logs" },
+          { id: "stats",    label: "Stats" },
+          { id: "inspect",  label: "Inspect" },
+        ],
+        async init() {},
+        async load() {
+          this.loading = true;
+          try {
+            this.detail = await cd.call("GET", `/containers/${encodeURIComponent(this.route.id)}`);
+          } catch (e) {
+            cd.toast("error", e.message);
+          } finally {
+            this.loading = false;
+          }
+          // Auto-load tab content
+          this.$nextTick(() => this._onTab(this.route.tab));
+          // Listen for tab changes via hash
+          window.addEventListener("hashchange", () => {
+            const r = cd.parseHash();
+            if (r.view === "container-detail" && r.id === this.route.id) this._onTab(r.tab);
+            else this._cleanup();
+          });
+        },
+        setTab(id) {
+          location.hash = `#/containers/${encodeURIComponent(this.route.id)}/${id}`;
+        },
+        _onTab(tab) {
+          this._cleanup();
+          if (tab === "logs")    this.reloadLogs();
+          if (tab === "stats")   this.startStats();
+          if (tab === "inspect") this.loadInspect();
+        },
+        _cleanup() {
+          this.stopStream();
+          this.stopStats();
+        },
+        stateClass(s) {
+          return containersView().stateClass(s);
+        },
+        // ---- Logs ----
+        async reloadLogs() {
+          this.stopStream();
+          try {
+            const r = await cd.call("GET", `/containers/${encodeURIComponent(this.route.id)}/logs?tail=${this.logsTail}`);
+            this.logs = r.lines || [];
+          } catch (e) {
+            cd.toast("error", e.message);
+          }
+        },
+        startStream() {
+          this.stopStream();
+          const url = `${cd.API_BASE}/containers/${encodeURIComponent(this.route.id)}/logs/stream?tail=200`;
+          this.es = new EventSource(url, { withCredentials: true });
+          this.streaming = true;
+          this.es.onmessage = (ev) => {
+            try {
+              const j = JSON.parse(ev.data);
+              if (j.line) {
+                this.logs.push(j.line);
+                if (this.logs.length > 5000) this.logs.splice(0, 1000);
+              }
+            } catch {}
+          };
+          this.es.onerror = () => { this.stopStream(); };
+        },
+        stopStream() {
+          if (this.es) { try { this.es.close(); } catch {} this.es = null; }
+          this.streaming = false;
+        },
+        // ---- Stats ----
+        startStats() {
+          this.stopStats();
+          this.stats = null;
+          const url = `${cd.API_BASE}/containers/${encodeURIComponent(this.route.id)}/stats`;
+          this.statsEs = new EventSource(url, { withCredentials: true });
+          this.statsEs.onmessage = (ev) => {
+            try { this.stats = JSON.parse(ev.data); } catch {}
+          };
+          this.statsEs.onerror = () => { this.stopStats(); };
+        },
+        stopStats() {
+          if (this.statsEs) { try { this.statsEs.close(); } catch {} this.statsEs = null; }
+        },
+        // ---- Inspect ----
+        async loadInspect() {
+          try {
+            const r = await cd.call("GET", `/containers/${encodeURIComponent(this.route.id)}/inspect`);
+            this.inspectJson = JSON.stringify(r, null, 2);
+          } catch (e) {
+            cd.toast("error", e.message);
+          }
+        },
+      };
+    }
+
+    // ----- Images / Volumes / Networks -----
+    function _listView(path) {
+      return {
+        loading: true,
+        items: [],
+        total: 0,
+        async load() {
+          this.loading = true;
+          try {
+            const r = await cd.call("GET", `${path}?page_size=500`);
+            this.items = r.items;
+            this.total = r.total;
+          } catch (e) {
+            cd.toast("error", e.message);
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+    function imagesView()   { return _listView("/images");   }
+    function volumesView()  { return _listView("/volumes");  }
+    function networksView() { return _listView("/networks"); }
   </script>
+
 </body>
 </html>
