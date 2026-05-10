@@ -112,6 +112,8 @@ window.cd = (function () {
     if (parts[0] === "containers" && parts.length === 1) return { view: "containers" };
     if (parts[0] === "containers" && parts.length >= 2) {
       const id = decodeURIComponent(parts[1]);
+      // Exec is its own top-level view, not a tab (it owns the full body).
+      if (parts[2] === "exec") return { view: "container-exec", id };
       const tab = (parts[2] && ["overview", "logs", "stats", "inspect"].includes(parts[2])) ? parts[2] : "overview";
       return { view: "container-detail", id, tab };
     }

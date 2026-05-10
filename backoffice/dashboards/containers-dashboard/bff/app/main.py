@@ -22,6 +22,7 @@ from .middleware.audit import AuditMiddleware
 from .repos.db import run_migrations
 from .repos.docker_repo import get_docker_repo
 from .routers import containers, health, images, networks, summary, volumes
+from .routers import exec as exec_router
 from .settings import settings
 
 
@@ -103,6 +104,7 @@ def create_app() -> FastAPI:
     app.include_router(images.router, prefix="/api")
     app.include_router(volumes.router, prefix="/api")
     app.include_router(networks.router, prefix="/api")
+    app.include_router(exec_router.router, prefix="/api")
 
     # ---- Error handlers (design.md §7.1 envelope) ----
     @app.exception_handler(DomainError)

@@ -215,31 +215,32 @@ Antes de empezar **cualquier** fase:
 
 ### E.1 — BFF WebSocket exec
 
-- [ ] **E.1.1** `app/routers/exec.py` con `WS /api/containers/{id}/exec?shell=`.
-- [ ] **E.1.2** Dependency `require_admin` (defense in depth).
-- [ ] **E.1.3** Validar `shell ∈ {sh, bash, ash}`.
-- [ ] **E.1.4** `assert_not_protected(name)` antes de abrir exec.
-- [ ] **E.1.5** Crear exec con docker-py: `client.api.exec_create(id, cmd=[shell], tty=True, stdin=True)` + `exec_start(detach=False, tty=True, stream=True, demux=False, socket=True)`.
-- [ ] **E.1.6** Loop async: `asyncio.gather(ws→sock, sock→ws)` con `asyncio.wait_for` para idle timeout 5min.
-- [ ] **E.1.7** Frame JSON `{"resize": {"cols", "rows"}}` → `client.api.exec_resize`.
-- [ ] **E.1.8** Audit `exec_open` al iniciar; `exec_close` al cerrar (con `duration_ms`, `exit_code` de `exec_inspect`, `close_reason`).
-- [ ] **E.1.9** NO loguear bytes del stream.
+- [x] **E.1.1** `app/routers/exec.py` con `WS /api/containers/{id}/exec?shell=`.
+- [x] **E.1.2** Defense-in-depth: BFF lee `X-Auth-Request-Groups` y rechaza si no tiene `admin`.
+- [x] **E.1.3** Validar `shell ∈ {sh, bash, ash}`.
+- [x] **E.1.4** `is_protected(name)` antes de abrir exec → close 1008 protected_resource.
+- [x] **E.1.5** Crear exec con docker-py: `client.api.exec_create(id, cmd=[shell], tty=True, stdin=True, stdout=True, stderr=True)` + `exec_start(detach=False, tty=True, stream=False, socket=True)`.
+- [x] **E.1.6** Loop async: `asyncio.gather(ws→sock, sock→ws, idle_watchdog)` con `FIRST_COMPLETED`. Idle timeout 5 min.
+- [x] **E.1.7** Frame JSON `{"resize":{"cols","rows"}}` → `client.api.exec_resize`.
+- [x] **E.1.8** Audit `exec_open` al iniciar (status=101 ok, 400/403/409/423 cuando falla pre-flight); `exec_close` al cerrar con `duration_ms`, `exit_code`, `close_reason`.
+- [x] **E.1.9** NO loguear bytes del stream — sólo metadata (`shell`, `exec_id`, `close_reason`, `exit_code`).
 
 ### E.2 — Frontend xterm.js
 
-- [ ] **E.2.1** `frontend/assets/xterm.js`, `xterm.css`, `xterm-addon-fit.js` vendored.
-- [ ] **E.2.2** View `container-exec`: full-height terminal, selector shell, botón "Cerrar".
-- [ ] **E.2.3** Botón "Exec" en `container-detail` (solo admin, no en denylist).
-- [ ] **E.2.4** Resize handler envía `{"resize":{cols,rows}}`.
-- [ ] **E.2.5** Banner "🛑 Sesión exec activa — cerrarás conexión al salir de esta vista".
+- [x] **E.2.1** `frontend/assets/xterm.js` (5.3.0), `xterm.css`, `xterm-addon-fit.js` (0.8.0) vendored.
+- [x] **E.2.2** View `container-exec`: full-height terminal (65vh), selector shell, botón "Cerrar sesión" / "Conectar".
+- [x] **E.2.3** Botón "⌘ Exec" en `container-detail` (sólo `$store.app.canAdmin`, opacidad 40% si protected/!running).
+- [x] **E.2.4** `FitAddon` + handler `resize` → envía `{"resize":{cols,rows}}`.
+- [x] **E.2.5** Banner "🛑 Sesión exec activa — al salir cerrarás la conexión" + nota de no-persistencia.
 
 ### E.3 — Smoke tests Fase E
 
-- [ ] **E.3.1** Como `lglabsadmin`: abrir exec en un container running NO protegido, ejecutar `id; pwd; exit` — verificar audit_open + audit_close en SQLite/ELK.
-- [ ] **E.3.2** Como `lglabsoperator`: WS upgrade → 403 (gateway).
-- [ ] **E.3.3** Como `lglabsadmin`: exec sobre container en denylist → 423.
-- [ ] **E.3.4** Idle timeout: dejar sesión inactiva 5min → cierre con close_reason=idle_timeout.
-- [ ] **E.3.5** Verificar que el contenido del stream NO aparece en logs (grep absurdo).
+- [x] **E.3.1** Como `lglabsadmin`: WS sobre `lg-infra-backoffice-kafka-dashboard-bff` ejecutando `id; pwd; exit` — 101 + recv real shell output (`uid=0(root) gid=0(root)…`) + close 1000 reason=`exec_exited`. Audit `exec_open(101)` + `exec_close(200, exit_code=0, close_reason=exec_exited, duration_ms=…)`. *(Verificado vía Python websockets client a través del gateway.)*
+- [x] **E.3.2** Como `lglabsoperator`: WS upgrade → 403 (gateway, antes de tocar el BFF; respuesta de 196 bytes con `@forbidden_page`).
+- [x] **E.3.3** Como `lglabsadmin`: WS sobre `lg-infra-backoffice-keycloak` (denylist) → close 1008 reason=`protected_resource`. Audit `exec_open(423, close_reason=protected_resource)`.
+- [x] **E.3.4** Como `lglabsadmin`: WS con `?shell=zsh` → close 1008 reason=`invalid_shell:zsh`. Audit `exec_open(400, close_reason=invalid_shell, shell=zsh)`.
+- [ ] **E.3.5** Idle timeout: dejar sesión inactiva 5min → cierre con close_reason=idle_timeout. *(Aplazado: lógica probada por inspección de código + watchdog usando `time.monotonic()` y `IDLE_TIMEOUT_SECONDS=300`. Smoke explícito en CI Phase H.)*
+- [x] **E.3.6** Verificar que el contenido del stream NO aparece en logs ni audit_log: `detail` JSON sólo contiene metadata; el `audit_log.info` sólo emite el dict del evento. *(Inspección manual de la columna `detail` de `audit_log` confirma sólo `shell`, `exec_id`, `close_reason`, `exit_code`, `idle_timeout_seconds`.)*
 
 **Cierre Fase E**: US-5 implementada. Exec sessions auditadas + protegidas.
 

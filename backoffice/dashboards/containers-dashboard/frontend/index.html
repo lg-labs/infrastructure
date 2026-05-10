@@ -6,6 +6,9 @@
   <title>Containers Dashboard · LG Labs</title>
   <script src="/containers/assets/tailwind.min.js"></script>
   <script src="/containers/assets/app.js"></script>
+  <link rel="stylesheet" href="/containers/assets/xterm.css" />
+  <script src="/containers/assets/xterm.js"></script>
+  <script src="/containers/assets/xterm-addon-fit.js"></script>
   <script defer src="/containers/assets/alpine.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
@@ -198,6 +201,13 @@
                   :title="detail?.is_protected ? '🔒 protegido' : (detail?.state!=='running' ? 'No está corriendo' : 'Reiniciar')">
             ↻ Restart
           </button>
+          <a x-show="$store.app.canAdmin"
+             :href="(detail?.is_protected || detail?.state!=='running') ? null : `#/containers/${encodeURIComponent(route.id)}/exec`"
+             :class="(detail?.is_protected || detail?.state!=='running') ? 'pointer-events-none opacity-40' : ''"
+             class="text-sm px-3 py-1 rounded bg-slate-800 text-white"
+             :title="detail?.is_protected ? '🔒 protegido' : (detail?.state!=='running' ? 'No está corriendo' : 'Abrir shell exec')">
+            ⌘ Exec
+          </a>
         </div>
       </div>
 
@@ -404,6 +414,37 @@
         </div>
 
       </div>
+    </section>
+
+    <!-- ============== CONTAINER EXEC (admin-only WS shell) ============== -->
+    <section x-show="route.view==='container-exec'" x-data="containerExecView()" x-init="init()" class="space-y-3">
+      <div class="flex items-center gap-3 flex-wrap">
+        <a :href="`#/containers/${encodeURIComponent(route.id)}/overview`" @click="cleanup()"
+           class="text-blue-600 hover:underline text-sm">← Volver al detalle</a>
+        <h1 class="text-xl font-semibold flex items-center gap-2">
+          <span>Exec —</span><span class="font-mono text-base" x-text="route.id"></span>
+        </h1>
+        <span class="text-xs px-2 py-0.5 rounded bg-slate-200" x-text="connState"></span>
+        <div class="flex-1"></div>
+        <select x-model="shell" :disabled="connState==='connected'"
+                class="text-sm border rounded px-2 py-1">
+          <option value="sh">sh</option>
+          <option value="bash">bash</option>
+          <option value="ash">ash</option>
+        </select>
+        <button @click="connect()" x-show="connState!=='connected'"
+                class="text-sm px-3 py-1 rounded bg-slate-800 text-white">Conectar</button>
+        <button @click="disconnect()" x-show="connState==='connected'"
+                class="text-sm px-3 py-1 rounded bg-red-600 text-white">Cerrar sesión</button>
+      </div>
+
+      <div class="rounded bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+        🛑 <strong>Sesión exec activa</strong> — al salir de esta vista la conexión se cierra.
+        Idle de 5 minutos cierra automáticamente. El contenido del stream <strong>no se persiste</strong>;
+        sólo se audita apertura y cierre.
+      </div>
+
+      <div id="cd-xterm" class="rounded shadow bg-black" style="height:65vh"></div>
     </section>
 
     <!-- ============== IMAGES ============== -->
@@ -828,6 +869,119 @@
     function imagesView()   { return _listView("/images");   }
     function volumesView()  { return _listView("/volumes");  }
     function networksView() { return _listView("/networks"); }
+
+    // ----- Container exec (Phase E) -----
+    function containerExecView() {
+      return {
+        get route() { return cd.parseHash(); },
+        shell: "sh",
+        connState: "disconnected",        // disconnected | connecting | connected | closed
+        ws: null,
+        term: null,
+        fitAddon: null,
+        async init() {
+          this._mountTerm();
+          // Auto-connect when entering the view
+          this.connect();
+          // Cleanup on hash change away
+          this._hashHandler = () => {
+            const r = cd.parseHash();
+            if (r.view !== "container-exec") this.cleanup();
+          };
+          window.addEventListener("hashchange", this._hashHandler);
+          // Cleanup on tab close
+          this._unloadHandler = () => this.cleanup();
+          window.addEventListener("beforeunload", this._unloadHandler);
+          window.addEventListener("resize", () => this._fit());
+        },
+        _mountTerm() {
+          if (this.term) return;
+          if (!window.Terminal || !window.FitAddon) {
+            cd.toast("error", "xterm.js no se cargó correctamente.");
+            return;
+          }
+          this.term = new window.Terminal({
+            convertEol: true,
+            cursorBlink: true,
+            fontFamily: 'Menlo, "Cascadia Mono", Consolas, monospace',
+            fontSize: 13,
+            theme: { background: "#000000" },
+          });
+          this.fitAddon = new window.FitAddon.FitAddon();
+          this.term.loadAddon(this.fitAddon);
+          const el = document.getElementById("cd-xterm");
+          this.term.open(el);
+          this._fit();
+        },
+        _fit() {
+          if (!this.fitAddon) return;
+          try { this.fitAddon.fit(); } catch { /* layout not ready yet */ }
+          // Inform server of new size
+          if (this.ws && this.ws.readyState === WebSocket.OPEN && this.term) {
+            this.ws.send(JSON.stringify({ resize: { cols: this.term.cols, rows: this.term.rows } }));
+          }
+        },
+        connect() {
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+          this.connState = "connecting";
+          const proto = location.protocol === "https:" ? "wss:" : "ws:";
+          const url = `${proto}//${location.host}/containers/api/containers/${encodeURIComponent(this.route.id)}/exec?shell=${this.shell}`;
+          let ws;
+          try {
+            ws = new WebSocket(url);
+          } catch (e) {
+            this.connState = "closed";
+            cd.toast("error", "No se pudo abrir WebSocket.");
+            return;
+          }
+          this.ws = ws;
+          ws.onopen = () => {
+            this.connState = "connected";
+            this.term.writeln("\x1b[32m[connected]\x1b[0m");
+            this._fit();
+            // Pipe terminal input to ws
+            this._termSub = this.term.onData(data => {
+              if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(data);
+            });
+          };
+          ws.onmessage = (ev) => {
+            if (typeof ev.data === "string") this.term.write(ev.data);
+            else if (ev.data instanceof Blob) ev.data.text().then(t => this.term.write(t));
+          };
+          ws.onclose = (ev) => {
+            this.connState = "closed";
+            const reason = ev.reason || "(sin razón)";
+            this.term.writeln(`\r\n\x1b[31m[closed code=${ev.code} reason=${reason}]\x1b[0m`);
+            try { if (this._termSub) this._termSub.dispose(); } catch {}
+            this.ws = null;
+            // Map common close reasons to toast
+            if (ev.code === 1008 && reason.includes("forbidden"))            cd.toast("error", "Acceso denegado (no admin).");
+            else if (reason === "protected_resource")                          cd.toast("error", cd.humanizeError({error:"protected_resource"}));
+            else if (reason.startsWith("invalid_shell"))                       cd.toast("error", cd.humanizeError({error:"invalid_shell"}));
+            else if (reason === "container_not_running")                       cd.toast("warn", "El container no está corriendo.");
+            else if (reason === "idle_timeout")                                cd.toast("warn", "Sesión cerrada por inactividad (5 min).");
+            else if (reason === "exec_exited")                                 cd.toast("info", "Shell finalizado.");
+            else if (reason === "client_disconnect")                           {} // user-initiated
+          };
+          ws.onerror = (e) => {
+            this.term.writeln("\r\n\x1b[31m[error]\x1b[0m");
+          };
+        },
+        disconnect() {
+          if (this.ws) {
+            try { this.ws.close(1000, "client_disconnect"); } catch {}
+          }
+        },
+        cleanup() {
+          this.disconnect();
+          try { window.removeEventListener("hashchange", this._hashHandler); } catch {}
+          try { window.removeEventListener("beforeunload", this._unloadHandler); } catch {}
+          try { if (this.term) this.term.dispose(); } catch {}
+          this.term = null;
+          this.fitAddon = null;
+        },
+      };
+    }
   </script>
 
 </body>
