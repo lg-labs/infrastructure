@@ -1,6 +1,6 @@
 # Containers Dashboard — Tasks
 
-> Versión: 0.1.0 · Estado: Approved · Última actualización: 2026-05-10
+> Versión: 1.0.0 · Estado: MVP Completed · Última actualización: 2026-05-10
 >
 > Plan de implementación. Cada fase tiene **entregables verificables** y **criterio de cierre**. No se cierra una fase sin smoke test pasando + spec actualizado.
 >
@@ -310,30 +310,30 @@ Antes de empezar **cualquier** fase:
 
 ### H.1 — User guide propio
 
-- [ ] **H.1.1** `backoffice/dashboards/containers-dashboard/docs/user-guide.es.md` con estructura 2-partes (usuario + operador), diagramas Mermaid (sequence SSO + arch sub-stack + audit pipeline), runbooks, tabla de errores, tabla de limitaciones. Incluir sección "Cuándo usar Containers Dashboard vs Portainer".
-- [ ] **H.1.2** Versión EN paralela `user-guide.en.md`.
+- [x] **H.1.1** `backoffice/dashboards/containers-dashboard/docs/user-guide.es.md` con estructura 2-partes (usuario + operador), diagramas Mermaid (sequence SSO + arch sub-stack + audit pipeline), runbooks R1-R7, tabla de errores, tabla de limitaciones L1-L9, sección "Cuándo usar Containers Dashboard vs Portainer".
+- [x] **H.1.2** Versión EN paralela `user-guide.en.md`.
 
 ### H.2 — README del sub-stack
 
-- [ ] **H.2.1** `backoffice/dashboards/containers-dashboard/README.md` siguiendo convención BackOffice (Quickstart + creds + arquitectura ASCII + tabla roles + smoke recipes + warning sobre docker.sock).
+- [x] **H.2.1** `backoffice/dashboards/containers-dashboard/README.md` siguiendo convención BackOffice (Quickstart + creds + arquitectura ASCII + tabla roles + smoke recipes + warning sobre docker.sock).
 
 ### H.3 — CI
 
-- [ ] **H.3.1** Añadir job `containers-dashboard-smoke` a `.github/workflows/test-dotfiles.yml` (workflow_dispatch + schedule, mismo patrón que kafka-dashboard-smoke).
-- [ ] **H.3.2** Job ejecuta `smoke-c.sh` + `smoke-g.sh`; dump logs ante fallo; cleanup al final.
+- [x] **H.3.1** Job `containers-dashboard-smoke` añadido a `.github/workflows/test-dotfiles.yml` (workflow_dispatch + schedule, mismo patrón que kafka-dashboard-smoke).
+- [x] **H.3.2** Job ejecuta `smoke-{c,d,f,g}.sh`; dump logs ante fallo; cleanup al final.
 
 ### H.4 — Root README
 
-- [ ] **H.4.1** Bloque `## [Start with Containers Dashboard][containers-dashboard-doc]` en root `README.md`, debajo del de Kafka Dashboard.
+- [x] **H.4.1** Bloque `## [Start with Containers Dashboard][containers-dashboard-doc]` añadido en root `README.md`, debajo del de Kafka Dashboard, con link refs.
 
 ### H.5 — Bumpear versiones de specs
 
-- [ ] **H.5.1** `requirements.md` 0.2.0 "MVP Implemented", `design.md` 0.2.0 "Reflects implementation", `tasks.md` 1.0.0 "MVP Completed".
+- [x] **H.5.1** `requirements.md` 0.2.0 "MVP Implemented", `design.md` 0.2.0 "Reflects implementation", `tasks.md` 1.0.0 "MVP Completed".
 
 ### H.6 — Backlog + trazabilidad inversa
 
-- [ ] **H.6.1** `specs/backlog.md` con: A. Capabilities pospuestas (compose stacks, pull/push, build, multi-host, métricas históricas), B. Tech debt, C. Trazabilidad US→fases→commits, D. Decisiones→file map, E. Snapshot final.
-- [ ] **H.6.2** Commit final `feat(containers-dashboard): phase H — SDD retrospective + backlog`.
+- [x] **H.6.1** `specs/backlog.md` con: A. Capabilities pospuestas (compose stacks, pull/push, build, multi-host, métricas históricas), B. Tech debt, C. Trazabilidad US→fases→commits, D. Decisiones→file map, E. Snapshot final.
+- [x] **H.6.2** Commit final `feat(containers-dashboard): phase H — docs + CI + retrospective`.
 
 **Cierre Fase H**: ciclo SDD cerrado.
 

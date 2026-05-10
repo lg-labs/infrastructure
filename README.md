@@ -218,6 +218,30 @@ make backoffice-down
 make backoffice-clean
 ```
 
+## [Start with Containers Dashboard][containers-dashboard-doc]
+Microfrontend del BackOffice (`/containers/`) para gestionar el **daemon Docker del host**: containers, images, volumes, networks; con logs/stats live, exec shell (admin) y remove (admin), todo bajo SSO + roles del BackOffice y audit a `backoffice-audit-*`. Arranca automáticamente con el BackOffice. Coexiste con Portainer (`/portainer/`).
+
+```shell
+make backoffice-up   # incluye containers-dashboard
+```
+
+> 👋  **[Containers Dashboard, Port:8080/containers/][containers-dashboard]**
+>
+> _Mismos 4 usuarios seed del BackOffice (admin / operator / support / viewer):_
+> Username: `lglabsadmin` (o `lglabsoperator`, `lglabssupport`, `lglabsviewer`)
+> Password: `lgpass`
+>
+> ⚠️ Requiere `make elk-up` previamente. Atención: el BFF tiene `docker.sock:rw` (mismo nivel que Portainer); mitigado vía denylist + RBAC + audit.
+
+😴 Containers Dashboard **stop** (junto al BackOffice):
+```shell
+make backoffice-down
+```
+⛔️ Containers Dashboard **destroy** (borra `backoffice-containers-dashboard-data`):
+```shell
+make backoffice-clean
+```
+
 # All in one
 Using `makefile` to **start** All.
 
@@ -255,6 +279,7 @@ The MIT License (MIT). Please see [License][3] for more information.
 [postgres-ui]: http://localhost:5012 "http://localhost:5012"
 [backoffice]: http://localhost:8080 "http://localhost:8080"
 [kafka-dashboard]: http://localhost:8080/kafka/ "http://localhost:8080/kafka/"
+[containers-dashboard]: http://localhost:8080/containers/ "http://localhost:8080/containers/"
 
 
 [elk-doc]: elk/README.md
@@ -265,3 +290,4 @@ The MIT License (MIT). Please see [License][3] for more information.
 [kafka-doc]: kafka/README.md
 [backoffice-doc]: backoffice/README.md
 [kafka-dashboard-doc]: backoffice/dashboards/kafka-dashboard/README.md
+[containers-dashboard-doc]: backoffice/dashboards/containers-dashboard/README.md
