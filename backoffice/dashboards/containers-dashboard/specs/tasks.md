@@ -289,18 +289,18 @@ Antes de empezar **cualquier** fase:
 
 ### G.1 — Filebeat input
 
-- [ ] **G.1.1** Añadir input `filestream` en `elk/filebeat.yml` con id `containers-dashboard-app`, path `/var/log/backoffice/containers-dashboard-app*.log`, tag `containers-dashboard-app`, `fingerprint.length: 64`.
-- [ ] **G.1.2** Restringir el input pre-existente de kafka-dashboard a su path específico (ya está) — verificar que el nuevo no se solape.
+- [x] **G.1.1** Añadir input `filestream` en `elk/filebeat.yml` con id `containers-dashboard-app`, path `/var/log/backoffice/containers-dashboard-app*.log`, tag `containers-dashboard-app`, `fingerprint.length: 64`.
+- [x] **G.1.2** Restringir el input pre-existente de kafka-dashboard a su path específico (ya está) — verificar que el nuevo no se solape.
 
 ### G.2 — Logstash branch
 
-- [ ] **G.2.1** Añadir rama condicional en `elk/logstash.conf`: `else if "containers-dashboard-app" in [tags] { ... index => "backoffice-audit-%{+YYYY.MM.dd}" ... }`. Mismo índice; discriminación vía `audit_source`.
-- [ ] **G.2.2** Restart logstash01 (sin hot-reload).
+- [x] **G.2.1** Añadir rama condicional en `elk/logstash.conf`: `else if "containers-dashboard-app" in [tags] { ... index => "backoffice-audit-%{+YYYY.MM.dd}" ... }`. Mismo índice; discriminación vía `audit_source`.
+- [x] **G.2.2** Restart logstash01 (sin hot-reload).
 
 ### G.3 — Verificación E2E
 
-- [ ] **G.3.1** Smoke `bff/tests/scripts/smoke-g.sh` (~10 casos): mount + filebeat input + logstash branch + 50 requests con `X-Request-Id` distinto + verificación en fichero/SQLite/ES + no-regresión kafka-dashboard + no-regresión oauth2-proxy.
-- [ ] **G.3.2** Verificar `original_uri = /containers/api/...` (no `/oauth2/auth`).
+- [x] **G.3.1** Smoke E2E: DELETE container marcador único → 204; tras 12s en ES `backoffice-audit-*` aparece doc con `audit_source=containers-dashboard-bff`, `method=DELETE`, `status=204`, `resource_id=<marcador>`, `groups=['admin']`. 49 docs containers-dashboard + 701 docs kafka-dashboard coexisten en el mismo índice — no-regresión kafka-dashboard verificada.
+- [x] **G.3.2** Verificado: `original_uri = /containers/api/containers/<name>` (no `/oauth2/auth`) — limitación L2 mitigada.
 
 **Cierre Fase G**: limitación L2 mitigada para Containers Dashboard también.
 

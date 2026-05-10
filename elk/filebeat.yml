@@ -57,5 +57,28 @@ filebeat.inputs:
     fields_under_root: true
     tags: [ "kafka-dashboard-app" ]
 
+  # Containers Dashboard BFF audit log (Phase G)
+  # El BFF (FastAPI) escribe NDJSON en
+  # /var/log/backoffice/containers-dashboard-app.log (mismo volumen compartido).
+  # Distinguible por `audit_source: containers-dashboard-bff` dentro del evento.
+  - type: filestream
+    enabled: true
+    id: containers-dashboard-app
+    paths:
+      - /var/log/backoffice/containers-dashboard-app*.log
+    prospector.scanner.fingerprint:
+      enabled: true
+      offset: 0
+      length: 64
+    parsers:
+      - ndjson:
+          target: ""
+          overwrite_keys: true
+          add_error_key: true
+    fields:
+      source: containers-dashboard-app
+    fields_under_root: true
+    tags: [ "containers-dashboard-app" ]
+
 output.logstash:
   hosts: [ "${HOSTS}" ]
