@@ -153,5 +153,140 @@ for r in admin operator support viewer; do
   echo "  $r → LIST=$c1  SET_COMPAT=$c2  EXPORT=$c3"
 done
 
+# ============================================================
+# Phase E — ACL-metadata (SQLite-only annotations; cluster does NOT enforce)
+# Smoke fixture: principal=User:smoke.e.team, resource=lglabs.smoke.d.events.
+# Each run cleans up its own E.* entries via the API.
+# ============================================================
+echo
+echo "==> E.0 endpoint reachable + role matrix LIST"
+for r in admin operator support viewer; do
+  T=$(cat /tmp/kd-token-$r)
+  code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $T" "$GW$PREFIX/api/acl-metadata")
+  echo "  LIST as $r → $code (expected 200)"
+done
+
+echo
+echo "==> E.1 admin creates 3 entries (different operations)"
+ACL_IDS=()
+for OP in READ WRITE DESCRIBE; do
+  PAYLOAD=$(OP="$OP" python3 -c "
+import json, os
+op = os.environ['OP']
+print(json.dumps({
+  'principal': 'User:smoke.e.team',
+  'host': '*',
+  'operation': op,
+  'resource_type': 'TOPIC',
+  'resource_name': 'lglabs.smoke.e.',
+  'pattern_type': 'PREFIXED',
+  'permission_type': 'ALLOW',
+  'note': f'phase E smoke {op}',
+}))")
+  RESP=$(curl -s -X POST -H "Authorization: Bearer $T_ADMIN" -H "Content-Type: application/json" \
+    -d "$PAYLOAD" "$GW$PREFIX/api/acl-metadata")
+  ID=$(python3 -c "import sys,json;print(json.loads(sys.argv[1]).get('id',''))" "$RESP")
+  echo "  POST op=$OP → id=$ID"
+  ACL_IDS+=("$ID")
+done
+
+echo
+echo "==> E.2 duplicate POST → 409 acl_metadata_duplicate"
+PAYLOAD=$(python3 -c "
+import json
+print(json.dumps({
+  'principal': 'User:smoke.e.team', 'host': '*', 'operation': 'READ',
+  'resource_type': 'TOPIC', 'resource_name': 'lglabs.smoke.e.',
+  'pattern_type': 'PREFIXED', 'permission_type': 'ALLOW',
+}))")
+curl -s -o /tmp/kd-e2.json -w "  HTTP %{http_code}\n" -X POST \
+  -H "Authorization: Bearer $T_ADMIN" -H "Content-Type: application/json" \
+  -d "$PAYLOAD" "$GW$PREFIX/api/acl-metadata"
+python3 -c "import json;d=json.load(open('/tmp/kd-e2.json'));print('  error=',d.get('error'))"
+
+echo
+echo "==> E.3 invalid principal → 422 validation_error"
+PAYLOAD=$(python3 -c "
+import json
+print(json.dumps({
+  'principal': 'nobody', 'operation': 'READ',
+  'resource_type': 'TOPIC', 'resource_name': 'lglabs.x',
+  'pattern_type': 'LITERAL', 'permission_type': 'ALLOW',
+}))")
+curl -s -o /tmp/kd-e3.json -w "  HTTP %{http_code}\n" -X POST \
+  -H "Authorization: Bearer $T_ADMIN" -H "Content-Type: application/json" \
+  -d "$PAYLOAD" "$GW$PREFIX/api/acl-metadata"
+python3 -c "import json;d=json.load(open('/tmp/kd-e3.json'));print('  error=',d.get('error'))"
+
+echo
+echo "==> E.4 admin updates first entry (note changed)"
+FIRST_ID=${ACL_IDS[0]}
+PAYLOAD=$(python3 -c "
+import json
+print(json.dumps({
+  'principal': 'Group:smoke.e.team', 'host': '*', 'operation': 'READ',
+  'resource_type': 'TOPIC', 'resource_name': 'lglabs.smoke.e.',
+  'pattern_type': 'PREFIXED', 'permission_type': 'ALLOW',
+  'note': 'updated by E.4',
+}))")
+curl -s -o /tmp/kd-e4.json -w "  HTTP %{http_code}\n" -X PUT \
+  -H "Authorization: Bearer $T_ADMIN" -H "Content-Type: application/json" \
+  -d "$PAYLOAD" "$GW$PREFIX/api/acl-metadata/$FIRST_ID"
+python3 -c "import json;d=json.load(open('/tmp/kd-e4.json'));print('  principal=',d.get('principal'),' note=',d.get('note'))"
+
+echo
+echo "==> E.5 role matrix POST/PUT/DELETE → admin only"
+PAYLOAD=$(python3 -c "
+import json
+print(json.dumps({
+  'principal': 'User:rbac.smoke', 'host': '*', 'operation': 'READ',
+  'resource_type': 'CLUSTER', 'resource_name': 'kafka-cluster',
+  'pattern_type': 'LITERAL', 'permission_type': 'ALLOW',
+}))")
+for r in admin operator support viewer; do
+  T=$(cat /tmp/kd-token-$r)
+  code=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $T" \
+    -H "Content-Type: application/json" -d "$PAYLOAD" "$GW$PREFIX/api/acl-metadata")
+  echo "  POST as $r → $code (expected admin=201, others=403)"
+done
+# cleanup the rbac.smoke entry if it got created (admin call)
+RBAC_ID=$(curl -s -H "Authorization: Bearer $T_ADMIN" \
+  "$GW$PREFIX/api/acl-metadata?principal=rbac.smoke" \
+  | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['items'][0]['id'] if d['items'] else '')")
+if [ -n "$RBAC_ID" ]; then
+  curl -s -o /dev/null -X DELETE -H "Authorization: Bearer $T_ADMIN" \
+    -H "X-Confirm-Resource: $RBAC_ID" "$GW$PREFIX/api/acl-metadata/$RBAC_ID"
+fi
+
+echo
+echo "==> E.6 X-Confirm-Resource enforcement on DELETE"
+LAST_ID=${ACL_IDS[-1]}
+curl -s -o /dev/null -w "  no header → %{http_code}\n" -X DELETE \
+  -H "Authorization: Bearer $T_ADMIN" "$GW$PREFIX/api/acl-metadata/$LAST_ID"
+curl -s -o /dev/null -w "  wrong header → %{http_code}\n" -X DELETE \
+  -H "Authorization: Bearer $T_ADMIN" -H "X-Confirm-Resource: nope" \
+  "$GW$PREFIX/api/acl-metadata/$LAST_ID"
+curl -s -o /dev/null -w "  correct → %{http_code}\n" -X DELETE \
+  -H "Authorization: Bearer $T_ADMIN" -H "X-Confirm-Resource: $LAST_ID" \
+  "$GW$PREFIX/api/acl-metadata/$LAST_ID"
+
+echo
+echo "==> E.7 cleanup remaining smoke entries (admin)"
+for ID in "${ACL_IDS[0]}" "${ACL_IDS[1]}"; do
+  [ -z "$ID" ] && continue
+  code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+    -H "Authorization: Bearer $T_ADMIN" -H "X-Confirm-Resource: $ID" \
+    "$GW$PREFIX/api/acl-metadata/$ID")
+  echo "  DELETE $ID → $code"
+done
+
+echo
+echo "==> E.8 summary now reports acl count consistent with list"
+TOTAL=$(curl -s -H "Authorization: Bearer $T_ADMIN" "$GW$PREFIX/api/acl-metadata" \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['total'])")
+ACL_SUM=$(curl -s -H "Authorization: Bearer $T_ADMIN" "$GW$PREFIX/api/summary" \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['acl_metadata_total'])")
+echo "  total via list=$TOTAL  vs summary.acl_metadata_total=$ACL_SUM"
+
 echo
 echo "==> done"

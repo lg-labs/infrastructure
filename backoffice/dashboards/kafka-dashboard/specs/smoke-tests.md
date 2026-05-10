@@ -491,7 +491,83 @@ Validado dentro del mismo script (sección C.6): contenedores BackOffice siguen 
 
 ## Fase E · ACL-metadata
 
-> _Pendiente._
+**Estado**: ✅ PASS (2026-05-10) · 9/9 casos verde · 83/83 unit tests verde.
+
+**Script**: `bff/tests/scripts/smoke-c.sh` (sección "Phase E").
+**Fixture**: `principal=User:smoke.e.team`, `resource_name=lglabs.smoke.e.` (PREFIXED, TOPIC).
+Cada ejecución limpia sus propias entradas E.* vía la API.
+
+**Recordatorio de modelo**: `acl_metadata` es **anotación informativa en SQLite del BFF**.
+El cluster Kafka **NO** las aplica como ACL reales (design §A6, AC-7.3); el frontend muestra banner permanente.
+La autorización a nivel BFF es admin-only para mutaciones (defensa en profundidad sobre el gateway).
+
+### E.0 — Endpoint reachable + role matrix LIST
+
+```
+LIST as admin    → 200 ✓
+LIST as operator → 200 ✓
+LIST as support  → 200 ✓
+LIST as viewer   → 200 ✓
+```
+
+Los 4 roles pueden leer (US-7.1).
+
+### E.1 — Admin crea 3 entradas (operations distintas)
+
+```
+POST op=READ     → 201 id=1c3c1f36-... ✓
+POST op=WRITE    → 201 id=2f70cada-... ✓
+POST op=DESCRIBE → 201 id=e0d1faa3-... ✓
+```
+
+### E.2 — Duplicado → 409 `acl_metadata_duplicate`
+
+POST repitiendo `(principal, host, operation, resource_type, resource_name, pattern_type, permission_type)` → `HTTP 409` con `error=acl_metadata_duplicate` ✓ (UNIQUE de migración 001 + mapeo `_is_unique_violation`).
+
+### E.3 — Validación: principal inválido → 422 `validation_error`
+
+POST con `principal: "nobody"` (sin prefijo `User:` / `Group:`) → `HTTP 422` con `error=validation_error` ✓.
+
+### E.4 — PUT replace coherente
+
+PUT al primer id cambiando `principal: User:... → Group:...` y `note: "updated by E.4"`
+→ `HTTP 200` con campos actualizados ✓.
+
+### E.5 — Role matrix mutaciones (admin-only)
+
+```
+POST as admin    → 201 ✓
+POST as operator → 403 ✓
+POST as support  → 403 ✓
+POST as viewer   → 403 ✓
+```
+
+Confirma defensa en profundidad: aunque el gateway ya bloquea (nginx.conf §181), el BFF también responde 403 a operator/support/viewer.
+
+### E.6 — `X-Confirm-Resource` en DELETE
+
+```
+DELETE sin header        → 409 confirmation_required ✓
+DELETE header incorrecto → 409 confirmation_required ✓
+DELETE header correcto   → 204 ✓
+```
+
+### E.7 — Cleanup
+
+DELETE de las entradas restantes con header correcto → `204` cada una ✓.
+
+### E.8 — Consistencia summary ↔ list
+
+```
+total via /api/acl-metadata = 0
+summary.acl_metadata_total  = 0   ✓ (post-cleanup)
+```
+
+`summary.acl_metadata_total` (Fase B) refleja el contador real del repo.
+
+### E.9 — Sin regresiones en BackOffice
+
+Heredado de C.6 (mismo script): contenedores BackOffice siguen `healthy` (salvo el pre-existente `lg-infra-backoffice-gateway: unhealthy`).
 
 ---
 

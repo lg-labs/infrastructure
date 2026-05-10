@@ -58,6 +58,22 @@ class InvalidCompatibilityLevel(DomainError):
                          {"given": given, "allowed": allowed})
 
 
+class InvalidPrincipal(DomainError):
+    """ACL principal must start with `User:` or `Group:` (design §3.5)."""
+
+    def __init__(self, principal: str):
+        super().__init__(400, "invalid_principal",
+                         "principal must start with 'User:' or 'Group:'",
+                         {"principal": principal})
+
+
+class InvalidResourcePattern(DomainError):
+    """Resource pattern shape doesn't match enum / non-empty rules."""
+
+    def __init__(self, reason: str, **details):
+        super().__init__(400, "invalid_resource_pattern", reason, details)
+
+
 # 403
 class InternalTopicProtected(DomainError):
     def __init__(self, name: str):
@@ -85,6 +101,12 @@ class SchemaVersionNotFound(DomainError):
                          {"subject": subject, "version": version})
 
 
+class AclMetadataNotFound(DomainError):
+    def __init__(self, acl_id: str):
+        super().__init__(404, "acl_metadata_not_found",
+                         f"acl-metadata {acl_id!r} does not exist", {"id": acl_id})
+
+
 # 409
 class IncompatibleSchema(DomainError):
     """Re-emitted from Schema Registry verbatim (design §A5)."""
@@ -100,6 +122,26 @@ class TopicAlreadyExists(DomainError):
     def __init__(self, name: str):
         super().__init__(409, "topic_already_exists",
                          f"topic {name!r} already exists", {"name": name})
+
+
+class AclMetadataDuplicate(DomainError):
+    """UNIQUE constraint violation on `acl_metadata` (design §7.2)."""
+
+    def __init__(self, principal: str, resource_type: str, resource_name: str,
+                 operation: str, permission_type: str):
+        super().__init__(
+            409, "acl_metadata_duplicate",
+            "acl-metadata with the same (principal, host, operation, "
+            "resource_type, resource_name, pattern_type, permission_type) "
+            "already exists",
+            {
+                "principal": principal,
+                "resource_type": resource_type,
+                "resource_name": resource_name,
+                "operation": operation,
+                "permission_type": permission_type,
+            },
+        )
 
 
 class ConfirmationRequired(DomainError):

@@ -22,6 +22,7 @@
         <a href="#/" class="hover:underline" :class="route.view==='home' ? 'text-amber-300' : ''">Inicio</a>
         <a href="#/topics" class="hover:underline" :class="route.view==='topics' || route.view==='topic-detail' ? 'text-amber-300' : ''">Topics</a>
         <a href="#/schemas" class="hover:underline" :class="route.view==='schemas' || route.view==='schema-detail' ? 'text-amber-300' : ''">Schemas</a>
+        <a href="#/acl-metadata" class="hover:underline" :class="route.view==='acl-metadata' ? 'text-amber-300' : ''">ACL-metadata</a>
       </nav>
       <div class="flex-1"></div>
       <div class="text-sm flex items-center gap-3">
@@ -485,6 +486,187 @@
       </div>
     </section>
 
+    <!-- ============== ACL-METADATA VIEW ============== -->
+    <section x-show="route.view==='acl-metadata'" x-data="aclMetadataView()" x-init="load()" class="space-y-4">
+      <!-- Permanent banner — design §A6, AC-7.3 -->
+      <div class="bg-amber-100 border border-amber-300 text-amber-900 text-sm px-4 py-3 rounded">
+        <strong>⚠ ACL-metadata informativas.</strong>
+        El cluster Kafka no las aplica — son anotaciones almacenadas en SQLite del BFF
+        para inventario y futura migración a ACL reales (design §A6).
+      </div>
+
+      <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-semibold">ACL-metadata</h1>
+        <button x-show="user.is_admin" @click="openCreate()"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-1.5 rounded">
+          + Nueva entrada
+        </button>
+      </div>
+
+      <!-- Filters -->
+      <div class="flex flex-wrap gap-2 items-center">
+        <input type="search" x-model.debounce.300ms="filters.principal" @input="reload()"
+               placeholder="principal contiene…" class="border rounded px-3 py-1 text-sm w-56" />
+        <input type="search" x-model.debounce.300ms="filters.resource_name" @input="reload()"
+               placeholder="resource_name contiene…" class="border rounded px-3 py-1 text-sm w-56" />
+        <select x-model="filters.resource_type" @change="reload()" class="border rounded px-2 py-1 text-sm">
+          <option value="">— todos los tipos —</option>
+          <option value="TOPIC">TOPIC</option>
+          <option value="GROUP">GROUP</option>
+          <option value="CLUSTER">CLUSTER</option>
+        </select>
+        <span class="text-xs text-slate-500" x-text="`${items.length} de ${total} entradas`"></span>
+      </div>
+
+      <div x-show="loading" class="text-slate-500 text-sm">Cargando…</div>
+
+      <div x-show="!loading && items.length===0" class="text-slate-500 text-sm italic">
+        No hay entradas que coincidan.
+      </div>
+
+      <div x-show="!loading && items.length>0" class="bg-white rounded shadow overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-700 text-left">
+            <tr>
+              <th class="px-3 py-2">Principal</th>
+              <th class="px-3 py-2">Operación</th>
+              <th class="px-3 py-2">Recurso</th>
+              <th class="px-3 py-2">Pattern</th>
+              <th class="px-3 py-2">Permiso</th>
+              <th class="px-3 py-2">Note</th>
+              <th class="px-3 py-2">Creado</th>
+              <th class="px-3 py-2 text-right"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="a in items" :key="a.id">
+              <tr class="border-t hover:bg-slate-50 align-top">
+                <td class="px-3 py-2 font-mono text-xs break-all" x-text="a.principal"></td>
+                <td class="px-3 py-2"><span class="px-2 py-0.5 rounded bg-slate-100 text-xs" x-text="a.operation"></span></td>
+                <td class="px-3 py-2 font-mono text-xs">
+                  <div x-text="a.resource_type + ': ' + a.resource_name"></div>
+                  <div class="text-slate-400" x-text="`host=${a.host}`"></div>
+                </td>
+                <td class="px-3 py-2 text-xs" x-text="a.pattern_type"></td>
+                <td class="px-3 py-2">
+                  <span class="px-2 py-0.5 rounded text-xs"
+                        :class="a.permission_type==='ALLOW' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'"
+                        x-text="a.permission_type"></span>
+                </td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="a.note || ''"></td>
+                <td class="px-3 py-2 text-xs text-slate-500" x-text="(a.created_at||'').slice(0,10) + ' · ' + a.created_by"></td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">
+                  <button x-show="user.is_admin" @click="openEdit(a)" class="text-blue-600 hover:underline text-xs">editar</button>
+                  <button x-show="user.is_admin" @click="confirmDelete(a)" class="text-red-600 hover:underline text-xs ml-2">borrar</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex items-center gap-2 text-sm" x-show="total > page_size">
+        <button @click="prevPage()" :disabled="page<=1"
+                class="px-2 py-1 rounded bg-slate-200 disabled:bg-slate-100">←</button>
+        <span x-text="`página ${page} / ${Math.ceil(total/page_size)}`"></span>
+        <button @click="nextPage()" :disabled="page*page_size>=total"
+                class="px-2 py-1 rounded bg-slate-200 disabled:bg-slate-100">→</button>
+      </div>
+
+      <!-- Create / Edit modal -->
+      <div x-show="showForm" x-cloak class="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
+        <div class="bg-white rounded-lg shadow-lg max-w-2xl w-full p-5 space-y-3">
+          <h3 class="text-lg font-semibold" x-text="editingId ? 'Editar entrada' : 'Nueva entrada de ACL-metadata'"></h3>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block text-sm col-span-2">
+              Principal <span class="text-rose-600">*</span>
+              <input x-model="form.principal" placeholder="User:team-payments | Group:operators"
+                     class="border rounded px-2 py-1 text-sm w-full font-mono" />
+            </label>
+            <label class="block text-sm">
+              Host
+              <input x-model="form.host" class="border rounded px-2 py-1 text-sm w-full" />
+            </label>
+            <label class="block text-sm">
+              Operación
+              <select x-model="form.operation" class="border rounded px-2 py-1 text-sm w-full">
+                <template x-for="op in OPERATIONS" :key="op">
+                  <option :value="op" x-text="op"></option>
+                </template>
+              </select>
+            </label>
+            <label class="block text-sm">
+              Resource type
+              <select x-model="form.resource_type" class="border rounded px-2 py-1 text-sm w-full">
+                <template x-for="t in RESOURCE_TYPES" :key="t">
+                  <option :value="t" x-text="t"></option>
+                </template>
+              </select>
+            </label>
+            <label class="block text-sm">
+              Pattern type
+              <select x-model="form.pattern_type" class="border rounded px-2 py-1 text-sm w-full">
+                <template x-for="p in PATTERN_TYPES" :key="p">
+                  <option :value="p" x-text="p"></option>
+                </template>
+              </select>
+            </label>
+            <label class="block text-sm col-span-2">
+              Resource name <span class="text-rose-600">*</span>
+              <input x-model="form.resource_name"
+                     placeholder="lglabs.orders.  (PREFIXED) o nombre exacto (LITERAL)"
+                     class="border rounded px-2 py-1 text-sm w-full font-mono" />
+            </label>
+            <label class="block text-sm">
+              Permission type
+              <select x-model="form.permission_type" class="border rounded px-2 py-1 text-sm w-full">
+                <template x-for="p in PERMISSION_TYPES" :key="p">
+                  <option :value="p" x-text="p"></option>
+                </template>
+              </select>
+            </label>
+            <label class="block text-sm col-span-2">
+              Note (opcional)
+              <textarea x-model="form.note" rows="2"
+                        class="border rounded px-2 py-1 text-sm w-full"></textarea>
+            </label>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button @click="showForm=false" :disabled="submitting"
+                    class="px-3 py-1 rounded text-sm bg-slate-200 hover:bg-slate-300">Cancelar</button>
+            <button @click="submit()" :disabled="submitting || !form.principal.trim() || !form.resource_name.trim()"
+                    class="px-3 py-1 rounded text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300"
+                    x-text="editingId ? 'Guardar cambios' : 'Crear'"></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delete modal -->
+      <div x-show="deleting" x-cloak class="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
+        <div class="bg-white rounded-lg shadow-lg max-w-md w-full p-5 space-y-3">
+          <h3 class="text-lg font-semibold text-rose-700">Borrar entrada</h3>
+          <p class="text-sm">
+            Vas a borrar la entrada para <strong x-text="deleting && deleting.principal"></strong>
+            sobre <code x-text="deleting && (deleting.resource_type+':'+deleting.resource_name)"></code>.
+          </p>
+          <p class="text-sm">Escribe el id para confirmar:</p>
+          <p class="text-xs font-mono bg-slate-100 px-2 py-1 rounded break-all" x-text="deleting && deleting.id"></p>
+          <input x-model="deleteConfirm" placeholder="pega aquí el id"
+                 class="border rounded px-2 py-1 text-sm w-full font-mono" />
+          <div class="flex justify-end gap-2 pt-2">
+            <button @click="deleting=null; deleteConfirm=''" :disabled="deletingNow"
+                    class="px-3 py-1 rounded text-sm bg-slate-200 hover:bg-slate-300">Cancelar</button>
+            <button @click="doDelete()"
+                    :disabled="deletingNow || !deleting || deleteConfirm !== deleting.id"
+                    class="px-3 py-1 rounded text-sm bg-rose-600 text-white hover:bg-rose-700 disabled:bg-rose-300">
+              Borrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <footer class="bg-slate-100 text-slate-500 text-xs py-3 text-center border-t">
@@ -849,6 +1031,132 @@
             kd.toast("success", "Export descargado");
           } catch (e) {
             kd.toast("error", kd.humanizeError(e, "Export falló"));
+          }
+        },
+      };
+    }
+
+    function aclMetadataView() {
+      return {
+        OPERATIONS: ["READ","WRITE","CREATE","DELETE","ALTER","DESCRIBE","ALL"],
+        RESOURCE_TYPES: ["TOPIC","GROUP","CLUSTER"],
+        PATTERN_TYPES: ["LITERAL","PREFIXED"],
+        PERMISSION_TYPES: ["ALLOW","DENY"],
+
+        loading: true,
+        items: [],
+        total: 0,
+        page: 1,
+        page_size: 50,
+        filters: { principal: "", resource_name: "", resource_type: "" },
+
+        showForm: false,
+        editingId: null,
+        submitting: false,
+        form: this._blankForm(),
+
+        deleting: null,         // the row being deleted, or null
+        deleteConfirm: "",
+        deletingNow: false,
+
+        _blankForm() {
+          return {
+            principal: "User:",
+            host: "*",
+            operation: "READ",
+            resource_type: "TOPIC",
+            resource_name: "",
+            pattern_type: "LITERAL",
+            permission_type: "ALLOW",
+            note: "",
+          };
+        },
+
+        async load() {
+          this.loading = true;
+          try {
+            const params = new URLSearchParams();
+            if (this.filters.principal)     params.set("principal", this.filters.principal);
+            if (this.filters.resource_name) params.set("resource_name", this.filters.resource_name);
+            if (this.filters.resource_type) params.set("resource_type", this.filters.resource_type);
+            params.set("page", this.page);
+            params.set("page_size", this.page_size);
+            const r = await kd.call("GET", `/acl-metadata?${params.toString()}`);
+            this.items = r.items || [];
+            this.total = r.total || 0;
+          } catch (e) {
+            kd.toast("error", kd.humanizeError(e, "Error al listar ACL-metadata"));
+            this.items = [];
+            this.total = 0;
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        reload() { this.page = 1; this.load(); },
+        nextPage() { this.page++; this.load(); },
+        prevPage() { if (this.page > 1) { this.page--; this.load(); } },
+
+        openCreate() {
+          this.editingId = null;
+          this.form = this._blankForm();
+          this.showForm = true;
+        },
+
+        openEdit(a) {
+          this.editingId = a.id;
+          this.form = {
+            principal: a.principal,
+            host: a.host || "*",
+            operation: a.operation,
+            resource_type: a.resource_type,
+            resource_name: a.resource_name,
+            pattern_type: a.pattern_type,
+            permission_type: a.permission_type,
+            note: a.note || "",
+          };
+          this.showForm = true;
+        },
+
+        async submit() {
+          this.submitting = true;
+          try {
+            const body = { ...this.form, note: this.form.note || null };
+            if (this.editingId) {
+              await kd.call("PUT", `/acl-metadata/${this.editingId}`, { body });
+              kd.toast("success", "Entrada actualizada");
+            } else {
+              await kd.call("POST", `/acl-metadata`, { body });
+              kd.toast("success", "Entrada creada");
+            }
+            this.showForm = false;
+            await this.load();
+          } catch (e) {
+            kd.toast("error", kd.humanizeError(e, "No se pudo guardar"));
+          } finally {
+            this.submitting = false;
+          }
+        },
+
+        confirmDelete(a) {
+          this.deleting = a;
+          this.deleteConfirm = "";
+        },
+
+        async doDelete() {
+          if (!this.deleting) return;
+          this.deletingNow = true;
+          try {
+            await kd.call("DELETE", `/acl-metadata/${this.deleting.id}`,
+              { headers: { "X-Confirm-Resource": this.deleting.id } });
+            kd.toast("success", "Entrada borrada");
+            this.deleting = null;
+            this.deleteConfirm = "";
+            await this.load();
+          } catch (e) {
+            kd.toast("error", kd.humanizeError(e, "No se pudo borrar"));
+          } finally {
+            this.deletingNow = false;
           }
         },
       };

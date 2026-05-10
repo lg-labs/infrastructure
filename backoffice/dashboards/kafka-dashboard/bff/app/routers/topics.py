@@ -27,6 +27,7 @@ from ..models.domain import (
 )
 from ..owners import list_owner_ids
 from ..repos import topic_metadata_repo
+from ..repos import acl_metadata_repo
 from ..repos.kafka_repo import get_kafka_repo, is_internal
 
 router = APIRouter(prefix="/topics", tags=["topics"])
@@ -227,10 +228,10 @@ def delete_topic(
 def export_topic(name: str) -> Response:
     info = get_kafka_repo().describe_topic(name)
     meta = topic_metadata_repo.get(name)
+    acls = acl_metadata_repo.list_for_resource("TOPIC", name)
     payload = {
         "topic": _to_detail(info, meta).model_dump(),
-        # ACL associations to be filled in Phase E (left empty here)
-        "acl_metadata_associated": [],
+        "acl_metadata_associated": acls,
         "schemas_associated": [],
     }
     body = json.dumps(payload, indent=2, ensure_ascii=False)

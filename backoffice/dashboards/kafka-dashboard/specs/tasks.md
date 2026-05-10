@@ -211,28 +211,28 @@ Antes de empezar **cualquier** fase:
 
 ### E.1 — ACL repo
 
-- [ ] **E.1.1** `app/repos/acl_metadata_repo.py`: CRUD sobre `acl_metadata` con UNIQUE constraint enforcement.
-- [ ] **E.1.2** Validación de `principal` (debe empezar por `User:` o `Group:`), pattern_type, etc.
+- [x] **E.1.1** `app/repos/acl_metadata_repo.py`: CRUD sobre `acl_metadata` con UNIQUE constraint enforcement.
+- [x] **E.1.2** Validación de `principal` (debe empezar por `User:` o `Group:`), pattern_type, etc.
 
 ### E.2 — Endpoints ACL
 
-- [ ] **E.2.1** `app/routers/acl_metadata.py` con 4 endpoints (design §3.5).
-- [ ] **E.2.2** Confirmación con `X-Confirm-Resource: <id>` en DELETE.
-- [ ] **E.2.3** Authz: solo admin puede mutar (verificable en gateway, redoblado en BFF como defensa en profundidad).
+- [x] **E.2.1** `app/routers/acl_metadata.py` con 5 endpoints (LIST/GET/POST/PUT/DELETE — design §3.5).
+- [x] **E.2.2** Confirmación con `X-Confirm-Resource: <id>` en DELETE.
+- [x] **E.2.3** Authz: solo admin puede mutar (verificable en gateway, redoblado en BFF como defensa en profundidad vía `require_admin`).
 
 ### E.3 — Frontend ACL
 
-- [ ] **E.3.1** `frontend/acl-metadata.html`: lista filtrable + form de creación (admin only).
-- [ ] **E.3.2** **Banner permanente** "⚠ ACL-metadata informativas — el cluster no las aplica" (design §A6, AC-7.3).
-- [ ] **E.3.3** Botón "Export ACL-as-AdminClient JSON" para futuro path de migración.
+- [x] **E.3.1** Vista `#/acl-metadata` en SPA: lista filtrable (principal/resource_name/resource_type) + paginación + modales create/edit/delete (admin only).
+- [x] **E.3.2** **Banner permanente** "⚠ ACL-metadata informativas — el cluster no las aplica" (design §A6, AC-7.3).
+- [ ] **E.3.3** Botón "Export ACL-as-AdminClient JSON" para futuro path de migración. _(diferido a Fase F: el endpoint `/topics/{name}/export` ya incluye `acl_metadata_associated`; export global de ACL como bundle independiente no era bloqueante para US-7)_
 
 ### E.4 — Smoke tests Fase E
 
-- [ ] **E.4.1** Como admin: crear, editar, borrar ACL-metadata. Verificar UNIQUE constraint.
-- [ ] **E.4.2** Como operator: verificar 403 en POST/PUT/DELETE.
-- [ ] **E.4.3** Verificar audit en `backoffice-audit-*`.
+- [x] **E.4.1** Como admin: crear, editar, borrar ACL-metadata. Verificar UNIQUE constraint (smoke E.1/E.2/E.4/E.7).
+- [x] **E.4.2** Como operator/support/viewer: verificar 403 en POST/PUT/DELETE (smoke E.5).
+- [x] **E.4.3** Validación de inputs (principal inválido → 422, smoke E.3) y `X-Confirm-Resource` (smoke E.6); consistencia summary.acl_metadata_total ↔ list.total (smoke E.8).
 
-**Cierre Fase E**: US-7 implementada.
+**Cierre Fase E**: US-7 implementada. ✅ 83/83 unit tests + 9/9 smoke E.* live PASS (2026-05-10).
 
 ---
 

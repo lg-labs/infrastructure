@@ -245,6 +245,10 @@ def app_client(tmp_path, monkeypatch, fake_kafka, fake_registry):
         except Exception:
             pass
         db_mod._conn = None
+    # CRITICAL: db.py did `from ..settings import settings` at import time, which
+    # bound the OLD Settings instance into db.py's namespace. Rebind so the next
+    # `_connect()` reads the new sqlite_path.
+    db_mod.settings = settings_mod.settings
 
     # Inject the fake kafka repo (used via get_kafka_repo singleton)
     import app.repos.kafka_repo as kr

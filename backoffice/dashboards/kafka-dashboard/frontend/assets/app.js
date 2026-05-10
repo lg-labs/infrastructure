@@ -18,11 +18,15 @@ window.kd = (function () {
     invalid_rf:              "Replication factor inválido (debe ser ≤ número de brokers).",
     invalid_schema:          "El schema enviado es inválido o no se puede parsear.",
     invalid_compatibility_level: "Nivel de compatibilidad no válido.",
+    invalid_principal:       "El principal debe empezar por 'User:' o 'Group:'.",
+    invalid_resource_pattern:"El patrón del recurso no es válido.",
     internal_topic_protected:"Los topics internos (prefijo __ o _) no se pueden modificar.",
     topic_not_found:         "El topic no existe.",
     subject_not_found:       "El subject de schema no existe.",
     schema_version_not_found:"Esa versión del schema no existe.",
+    acl_metadata_not_found:  "La entrada de ACL-metadata no existe.",
     topic_already_exists:    "Ya existe un topic con ese nombre.",
+    acl_metadata_duplicate:  "Ya existe una entrada idéntica (mismo principal/host/operation/resource/pattern/permission).",
     incompatible_schema:     "El schema es incompatible con el nivel de compatibilidad configurado.",
     confirmation_required:   "Falta confirmación. Escribe el nombre exacto del recurso.",
     kafka_unavailable:       "El cluster de Kafka no responde.",
@@ -97,15 +101,17 @@ window.kd = (function () {
   }
 
   // ---- Hash router ----
-  // Routes: #/, #/topics, #/topics/<name>, #/schemas, #/schemas/<subject>
+  // Routes: #/, #/topics, #/topics/<name>, #/schemas, #/schemas/<subject>,
+  //         #/acl-metadata
   function parseHash() {
-    const h = (location.hash || "#/").slice(1);          // "/", "/topics", "/topics/lglabs.foo"
+    const h = (location.hash || "#/").slice(1);
     const parts = h.split("/").filter(Boolean);
     if (parts.length === 0) return { view: "home" };
     if (parts[0] === "topics" && parts.length === 1) return { view: "topics" };
     if (parts[0] === "topics" && parts.length >= 2) return { view: "topic-detail", name: decodeURIComponent(parts.slice(1).join("/")) };
     if (parts[0] === "schemas" && parts.length === 1) return { view: "schemas" };
     if (parts[0] === "schemas" && parts.length >= 2) return { view: "schema-detail", subject: decodeURIComponent(parts.slice(1).join("/")) };
+    if (parts[0] === "acl-metadata") return { view: "acl-metadata" };
     return { view: "home" };
   }
 
