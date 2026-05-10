@@ -743,7 +743,7 @@
 
       <!-- Grouped by registry / domain -->
       <div x-show="!loading && items.length > 0" class="space-y-3">
-        <template x-for="g in groupedItems()" :key="g.domain">
+        <template x-for="g in groups" :key="g.domain">
           <div class="bg-white rounded shadow overflow-hidden">
             <!-- Group header -->
             <button @click="toggleGroup(g.domain)" class="w-full flex items-center gap-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-left">
@@ -1369,9 +1369,10 @@
         forceLabel: "Force (borrar aunque esté en uso)",
         kindLabel: "imagen",
       });
-      const origLoad = v.load.bind(v);
+      const origLoad = v.load;
       v.load = async function () {
-        await origLoad();
+        // Call original with the reactive `this` (Alpine proxy), not the plain object.
+        await origLoad.call(this);
         // synthesize a stable confirmation token: repo:tag or id_short
         for (const img of this.items) {
           if (img.repository && img.tag && img.repository !== "<none>") img._confirm_name = `${img.repository}:${img.tag}`;
@@ -1398,20 +1399,28 @@
           img._domain = domain;
         }
       };
-      // Group accessor (computed each render — small lists)
-      v.groupedItems = function () {
-        const groups = {};
-        for (const img of this.items) {
-          const k = img._domain || "—";
-          (groups[k] = groups[k] || []).push(img);
-        }
-        // Sort: groups with most images first, but always docker.io/library last? No — just by count desc.
-        return Object.entries(groups)
-          .sort((a, b) => b[1].length - a[1].length)
-          .map(([domain, items]) => ({ domain, items, count: items.length, used: items.filter(i => i.containers_using > 0).length, totalSize: items.reduce((s, i) => s + (i.size_mb || 0), 0) }));
-      };
-      v.collapsed = {};  // domain -> bool
-      v.toggleGroup = function (domain) { this.collapsed[domain] = !this.collapsed[domain]; };
+      // Group accessor as a getter so Alpine tracks `items` as a dependency
+      // and re-renders the x-for when load() finishes mutating it.
+      Object.defineProperty(v, "groups", {
+        get() {
+          const m = {};
+          for (const img of this.items) {
+            const k = img._domain || "—";
+            (m[k] = m[k] || []).push(img);
+          }
+          return Object.entries(m)
+            .sort((a, b) => b[1].length - a[1].length)
+            .map(([domain, items]) => ({
+              domain, items,
+              count: items.length,
+              used: items.filter(i => i.containers_using > 0).length,
+              totalSize: items.reduce((s, i) => s + (i.size_mb || 0), 0),
+            }));
+        },
+        enumerable: true,
+      });
+      v.collapsed = {};
+      v.toggleGroup = function (domain) { this.collapsed = { ...this.collapsed, [domain]: !this.collapsed[domain] }; };
       return v;
     }
     function volumesView()  {
