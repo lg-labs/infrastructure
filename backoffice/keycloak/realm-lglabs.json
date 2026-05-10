@@ -1,0 +1,141 @@
+{
+  "realm": "lglabs",
+  "enabled": true,
+  "displayName": "lg-labs BackOffice",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+
+  "roles": {
+    "realm": [
+      { "name": "admin",    "description": "Full access: AKHQ, Portainer, Kibana, Keycloak Admin" },
+      { "name": "operator", "description": "Operate infra: AKHQ, Portainer (restart), Kibana" },
+      { "name": "support",  "description": "Read-only support views in Kibana" },
+      { "name": "viewer",   "description": "Read-only Kibana access" }
+    ]
+  },
+
+  "users": [
+    {
+      "username": "lglabsadmin",
+      "email": "lglabsadmin@lglabs.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "LgLabs",
+      "lastName": "Admin",
+      "credentials": [
+        { "type": "password", "value": "lgpass", "temporary": false }
+      ],
+      "realmRoles": ["admin"]
+    },
+    {
+      "username": "lglabsoperator",
+      "email": "lglabsoperator@lglabs.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "LgLabs",
+      "lastName": "Operator",
+      "credentials": [
+        { "type": "password", "value": "lgpass", "temporary": false }
+      ],
+      "realmRoles": ["operator"]
+    },
+    {
+      "username": "lglabssupport",
+      "email": "lglabssupport@lglabs.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "LgLabs",
+      "lastName": "Support",
+      "credentials": [
+        { "type": "password", "value": "lgpass", "temporary": false }
+      ],
+      "realmRoles": ["support"]
+    },
+    {
+      "username": "lglabsviewer",
+      "email": "lglabsviewer@lglabs.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "LgLabs",
+      "lastName": "Viewer",
+      "credentials": [
+        { "type": "password", "value": "lgpass", "temporary": false }
+      ],
+      "realmRoles": ["viewer"]
+    }
+  ],
+
+  "clients": [
+    {
+      "clientId": "oauth2-proxy",
+      "name": "oauth2-proxy (BackOffice SSO)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "lgpass-oidc-secret-change-me",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/oauth2/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:8080/*"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
+      "protocolMappers": [
+        {
+          "name": "realm-roles-as-groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "audience-oauth2-proxy",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "oauth2-proxy",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

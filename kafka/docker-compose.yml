@@ -145,8 +145,11 @@ services:
       schema-registry:
         condition: service_healthy
     environment:
+      MICRONAUT_SERVER_CONTEXT_PATH: /akhq
       AKHQ_CONFIGURATION: |
         akhq:
+          server:
+            base-path: "/akhq"
           connections:
             docker-kafka-server:
               properties:

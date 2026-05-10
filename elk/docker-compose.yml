@@ -13,6 +13,11 @@ volumes:
     driver: local
   enterprisesearchdata:
     driver: local
+  # Compartido con backoffice (creado por backoffice/docker-compose.yml).
+  # Filebeat lo lee read-only para ingestar el audit log de oauth2-proxy.
+  backoffice-audit-logs:
+    external: true
+    name: backoffice-audit-logs
 
 
 networks:
@@ -137,6 +142,8 @@ services:
       - ${KIBANA_PORT}:5601
     environment:
       - SERVERNAME=kibana
+      - SERVER_BASEPATH=/kibana
+      - SERVER_REWRITEBASEPATH=true
       - ELASTICSEARCH_HOSTS=https://es01:9200
       - ELASTICSEARCH_USERNAME=kibana_system
       - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
@@ -150,7 +157,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+          "curl -s -I http://localhost:5601/kibana | grep -q 'HTTP/1.1 302 Found'",
         ]
       interval: 10s
       timeout: 10s
@@ -198,6 +205,7 @@ services:
       - "./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro"
       - "/var/lib/docker/containers:/var/lib/docker/containers:ro"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "backoffice-audit-logs:/var/log/backoffice:ro"
     environment:
       - ELASTIC_USER=elastic
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}

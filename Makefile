@@ -17,7 +17,7 @@ docker-elk-up:
 	docker-compose -f ${ELK}/docker-compose.yml up -d
 
 elk-crt:
-	curl -O https://download.elastic.co/demos/kibana/gettingstarted/7.x/logs.jsonl.gz && docker cp es01:/usr/share/elasticsearch/config/certs/ca/ca.crt ./.tmp/.                                                                                                                                       0:48:39
+	curl -O https://download.elastic.co/demos/kibana/gettingstarted/7.x/logs.jsonl.gz && docker cp es01:/usr/share/elasticsearch/config/certs/ca/ca.crt ./.tmp/.
 
 docker-sonar-down-vol: docker-kill
 	docker-compose -f ${SONAR}/docker-compose.yml down --volumes
@@ -64,6 +64,15 @@ docker-kafka-down:
 docker-kafka-up:
 	docker-compose -f ${KAFKA}/docker-compose.yml up -d
 
+docker-backoffice-down-vol: docker-kill
+	docker-compose -f ${BACKOFFICE}/docker-compose.yml --env-file ${BACKOFFICE}/.env down --volumes
+
+docker-backoffice-down:
+	docker-compose -f ${BACKOFFICE}/docker-compose.yml --env-file ${BACKOFFICE}/.env down
+
+docker-backoffice-up:
+	docker-compose -f ${BACKOFFICE}/docker-compose.yml --env-file ${BACKOFFICE}/.env up -d
+
 # ELK
 elk-up: docker-elk-up
 elk-down: docker-elk-down
@@ -84,11 +93,6 @@ postgres-up: docker-postgres-up
 postgres-down: docker-postgres-down
 postgres-clean: docker-postgres-down-vol
 
-# DB - POSTGRES
-postgres-up: docker-postgres-up
-postgres-down: docker-postgres-down
-postgres-clean: docker-postgres-down-vol
-
 # Splunk
 splunk-up: docker-splunk-up
 splunk-down: docker-splunk-down
@@ -99,17 +103,23 @@ kafka-up: docker-kafka-up
 kafka-down:  docker-kafka-down
 kafka-clean: docker-kafka-down-vol
 
+# BackOffice
+backoffice-up: docker-backoffice-up
+backoffice-down: docker-backoffice-down
+backoffice-clean: docker-backoffice-down-vol
+
 # ALL
-all-up: elk-up sonar-up grafana-up postgres-up kafka-up
-all-down: elk-down sonar-down grafana-down postgres-down kafka-down
-all-clean: elk-clean sonar-clean grafana-clean postgres-clean kafka-clean
+all-up: elk-up sonar-up grafana-up postgres-up kafka-up backoffice-up
+all-down: elk-down sonar-down grafana-down postgres-down kafka-down backoffice-down
+all-clean: elk-clean sonar-clean grafana-clean postgres-clean kafka-clean backoffice-clean
 
 # Constants
 ELK = elk
 SONAR = sonar-qube
 GRAFANA = grafana-loki
-PROMETHUEUS= prometheus
+PROMETHEUS = prometheus
 DB = databases
 POSTGRES = ${DB}/postgres
 SPLUNK = splunk
 KAFKA = kafka
+BACKOFFICE = backoffice

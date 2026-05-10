@@ -44,3 +44,84 @@ jobs:
       - name: ✅ Run and Verify SonarQube
         run: |
           make sonar-up
+
+  # Smoke E2E del stack BackOffice. Pesado (Keycloak + ES + Kafka + nginx).
+  # Solo en schedule o ejecución manual para no penalizar cada PR.
+  backoffice-smoke:
+    name: BackOffice E2E smoke
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: 🛠️ Show docker version
+        run: docker version && docker compose version
+
+      - name: 📋 Prepare backoffice .env (lab defaults)
+        working-directory: backoffice
+        run: |
+          if [ ! -f .env ]; then
+            cp .env.example .env || true
+          fi
+          # Ajuste pragmático para CI: vmax mmap requerido por ES
+          sudo sysctl -w vm.max_map_count=262144 || true
+          ls -la
+
+      - name: 🚀 Bring up dependent stacks (elk, kafka)
+        run: |
+          make elk-up
+          make kafka-up
+          # ES tarda en montar el security setup; dar margen
+          for i in $(seq 1 60); do
+            if curl -ks -o /dev/null -w "%{http_code}" https://localhost:9200 -u elastic:lgpass | grep -qE "200|401"; then
+              echo "ES responsive"; break
+            fi
+            echo "waiting ES... ($i)"; sleep 5
+          done
+
+      - name: 🚀 Bring up backoffice
+        run: |
+          make backoffice-up
+          # Esperar gateway sano
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/oauth2/ping || echo 000)
+            echo "ping=$code"
+            [ "$code" = "200" ] && break
+            sleep 4
+          done
+
+      - name: ✅ Smoke — anonymous redirect
+        run: |
+          set -e
+          for path in / /me /akhq/ /portainer/ /kibana/ /keycloak/; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080$path")
+            echo "$path -> $code"
+            [ "$code" = "302" ] || { echo "FAIL: expected 302 for $path"; exit 1; }
+          done
+
+      - name: ✅ Smoke — bearer token works
+        run: |
+          set -e
+          TOK=$(curl -sk -X POST "http://localhost:8083/keycloak/realms/lglabs/protocol/openid-connect/token" \
+            -d "grant_type=password&client_id=oauth2-proxy&client_secret=lgpass-oidc-secret-change-me&username=lglabsadmin&password=lgpass" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
+          test -n "$TOK" || { echo "no token"; exit 1; }
+          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOK" http://localhost:8080/me)
+          echo "/me with admin token = $code"
+          [ "$code" = "200" ] || { echo "FAIL: expected 200"; exit 1; }
+
+      - name: 📜 Dump logs on failure
+        if: failure()
+        run: |
+          docker ps -a
+          for c in lg-infra-backoffice-keycloak lg-infra-backoffice-proxy lg-infra-backoffice-gateway es01 lg-infra-elk-kibana-1; do
+            echo "=== $c ==="
+            docker logs --tail 100 "$c" 2>&1 || true
+          done
+
+      - name: 🧹 Cleanup
+        if: always()
+        run: |
+          make all-clean || true

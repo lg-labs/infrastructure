@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>lg-labs BackOffice</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+    header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #8884; padding-bottom: .5rem; margin-bottom: 1.5rem; }
+    .me { font-size: .9rem; opacity: .8; }
+    .me code { background: #8882; padding: .1rem .3rem; border-radius: .25rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 1rem; }
+    .card { display: block; padding: 1rem; border: 1px solid #8884; border-radius: .5rem; text-decoration: none; color: inherit; transition: transform .1s; }
+    .card:hover { transform: translateY(-2px); border-color: #88f; }
+    .card h2 { margin: 0 0 .25rem 0; font-size: 1.1rem; }
+    .card p  { margin: 0; font-size: .85rem; opacity: .75; }
+    .hidden { display: none; }
+    .empty { padding: 2rem; text-align: center; opacity: .7; }
+    footer { margin-top: 3rem; font-size: .8rem; opacity: .6; text-align: center; }
+    a.logout { font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>lg-labs BackOffice</h1>
+    <div class="me">
+      <span id="me-user">cargando…</span>
+      &nbsp;·&nbsp;
+      <a class="logout" href="/oauth2/sign_out?rd=/oauth2/sign_in">Cerrar sesión</a>
+    </div>
+  </header>
+
+  <div class="grid" id="cards">
+    <a class="card" data-roles="admin,operator" href="/akhq/">
+      <h2>AKHQ</h2>
+      <p>Kafka topics, particiones, consumer lag.</p>
+    </a>
+    <a class="card" data-roles="admin,operator" href="/portainer/">
+      <h2>Portainer</h2>
+      <p>Ver y reiniciar contenedores Docker.</p>
+    </a>
+    <a class="card" data-roles="admin,operator,support,viewer" href="/kibana/">
+      <h2>Kibana</h2>
+      <p>Logs centralizados y audit log del BackOffice.</p>
+    </a>
+    <a class="card" data-roles="admin" href="/keycloak/">
+      <h2>Keycloak Admin</h2>
+      <p>Gestión de usuarios y roles del BackOffice.</p>
+    </a>
+  </div>
+
+  <p class="empty hidden" id="empty">Tu rol no tiene acceso a ninguna capability todavía.</p>
+
+  <footer>
+    lg-labs · BackOffice MVP · ver <code>backoffice/specs/</code>
+  </footer>
+
+  <script>
+    (async () => {
+      try {
+        const r = await fetch('/me', { credentials: 'same-origin' });
+        const me = await r.json();
+        const user = me.user || 'desconocido';
+        const groups = (me.groups || '').split(',').map(s => s.trim()).filter(Boolean);
+        document.getElementById('me-user').innerHTML = '👤 <code>' + user + '</code> (' + (groups.join(', ') || 'sin rol') + ')';
+        const cards = document.querySelectorAll('.card');
+        let visibles = 0;
+        cards.forEach(card => {
+          const allowed = (card.dataset.roles || '').split(',');
+          const ok = allowed.some(r => groups.includes(r));
+          if (!ok) card.classList.add('hidden');
+          else visibles++;
+        });
+        if (visibles === 0) document.getElementById('empty').classList.remove('hidden');
+      } catch (e) {
+        document.getElementById('me-user').textContent = 'error: ' + e.message;
+      }
+    })();
+  </script>
+</body>
+</html>

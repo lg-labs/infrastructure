@@ -170,6 +170,30 @@ make kafka-down
 make kafka-clean
 ```
 
+## [Start with BackOffice][backoffice-doc]
+Una sola URL con SSO sobre Keycloak para administrar Kafka (AKHQ), contenedores (Portainer), logs (Kibana) y el propio Keycloak Admin. Audit log automático a ELK.
+
+```shell
+make backoffice-up
+```
+
+> 👋  **[BackOffice WebSite, Port:8080][backoffice]**
+>
+> _4 usuarios seed, uno por rol (admin / operator / support / viewer):_
+> Username: `lglabsadmin` (o `lglabsoperator`, `lglabssupport`, `lglabsviewer`)
+> Password: `lgpass`
+>
+> ⚠️ Requiere `make elk-up` y `make kafka-up` previamente (o usar `make all-up`).
+
+😴 BackOffice **stop**:
+```shell
+make backoffice-down
+```
+⛔️ BackOffice **destroy**:
+```shell
+make backoffice-clean
+```
+
 # All in one
 Using `makefile` to **start** All.
 
@@ -205,6 +229,7 @@ The MIT License (MIT). Please see [License][3] for more information.
 [splunk]: http://localhost:9003 "http://localhost:9003"
 [kafka]: http://localhost:9080 "http://localhost:9080"
 [postgres-ui]: http://localhost:5012 "http://localhost:5012"
+[backoffice]: http://localhost:8080 "http://localhost:8080"
 
 
 [elk-doc]: elk/README.md
@@ -213,3 +238,4 @@ The MIT License (MIT). Please see [License][3] for more information.
 [grafana-doc]: grafana-loki/README.md
 [splunk-doc]: splunk/README.md
 [kafka-doc]: kafka/README.md
+[backoffice-doc]: backoffice/README.md

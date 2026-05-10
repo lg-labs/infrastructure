@@ -13,5 +13,23 @@ filebeat.inputs:
           fields: [ 'message' ]
           target: json
 
+  # BackOffice audit log (oauth2-proxy)
+  # El proxy escribe JSON line-delimited en /var/log/proxy/oauth2-proxy.log
+  # (volumen compartido `backoffice-audit-logs`).
+  - type: filestream
+    enabled: true
+    id: backoffice-audit
+    paths:
+      - /var/log/backoffice/*.log
+    parsers:
+      - ndjson:
+          target: ""
+          overwrite_keys: true
+          add_error_key: true
+    fields:
+      source: backoffice-audit
+    fields_under_root: true
+    tags: [ "backoffice-audit" ]
+
 output.logstash:
   hosts: [ "${HOSTS}" ]
