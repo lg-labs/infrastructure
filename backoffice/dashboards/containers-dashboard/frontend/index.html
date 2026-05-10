@@ -170,13 +170,73 @@
 
     <!-- ============== CONTAINER DETAIL ============== -->
     <section x-show="route.view==='container-detail'" x-data="containerDetailView()" x-init="load()" class="space-y-4">
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 flex-wrap">
         <a href="#/containers" class="text-blue-600 hover:underline text-sm">← Volver</a>
         <h1 class="text-2xl font-semibold flex items-center gap-2">
           <span x-text="detail?.name || route.id"></span>
           <span x-show="detail?.is_protected" class="text-amber-600 text-base" title="Protegido por denylist">🔒 protegido</span>
         </h1>
         <span x-show="detail" class="px-2 py-0.5 text-xs rounded" :class="stateClass(detail?.state)" x-text="detail?.state"></span>
+
+        <!-- Action buttons (Phase D) — visible only to writers (admin|operator) -->
+        <div class="ml-auto flex items-center gap-2" x-show="$store.app.canWrite && detail">
+          <button @click="askAction('start')"
+                  :disabled="detail?.is_protected || detail?.state==='running' || actionBusy"
+                  class="text-sm px-3 py-1 rounded bg-green-600 text-white disabled:bg-slate-300 disabled:cursor-not-allowed"
+                  :title="detail?.is_protected ? '🔒 protegido' : (detail?.state==='running' ? 'Ya está corriendo' : 'Iniciar')">
+            ▶ Start
+          </button>
+          <button @click="askAction('stop')"
+                  :disabled="detail?.is_protected || detail?.state!=='running' || actionBusy"
+                  class="text-sm px-3 py-1 rounded bg-amber-600 text-white disabled:bg-slate-300 disabled:cursor-not-allowed"
+                  :title="detail?.is_protected ? '🔒 protegido' : (detail?.state!=='running' ? 'No está corriendo' : 'Parar')">
+            ■ Stop
+          </button>
+          <button @click="askAction('restart')"
+                  :disabled="detail?.is_protected || detail?.state!=='running' || actionBusy"
+                  class="text-sm px-3 py-1 rounded bg-blue-600 text-white disabled:bg-slate-300 disabled:cursor-not-allowed"
+                  :title="detail?.is_protected ? '🔒 protegido' : (detail?.state!=='running' ? 'No está corriendo' : 'Reiniciar')">
+            ↻ Restart
+          </button>
+        </div>
+      </div>
+
+      <!-- Confirmation modal (Phase D) -->
+      <div x-show="confirm.open" x-cloak
+           class="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4"
+           @keydown.escape.window="cancelAction()">
+        <div class="bg-white rounded shadow-lg max-w-md w-full p-5 space-y-4">
+          <h2 class="text-lg font-semibold">
+            <span x-show="confirm.action==='start'">Iniciar container</span>
+            <span x-show="confirm.action==='stop'">Parar container</span>
+            <span x-show="confirm.action==='restart'">Reiniciar container</span>
+          </h2>
+          <p class="text-sm text-slate-700">
+            <template x-if="confirm.action==='start'">
+              <span>¿Confirmas iniciar <span class="font-mono font-semibold" x-text="confirm.name"></span>?</span>
+            </template>
+            <template x-if="confirm.action!=='start'">
+              <span>Para confirmar, escribe el nombre exacto del container:
+                <span class="block mt-2 font-mono text-xs bg-slate-100 px-2 py-1 rounded" x-text="confirm.name"></span>
+              </span>
+            </template>
+          </p>
+          <input x-show="confirm.action!=='start'" x-model="confirm.typed"
+                 class="w-full border rounded px-2 py-1 font-mono text-sm" placeholder="nombre exacto">
+          <div class="flex justify-end gap-2">
+            <button @click="cancelAction()" class="px-3 py-1 rounded bg-slate-200 hover:bg-slate-300 text-sm">
+              Cancelar
+            </button>
+            <button @click="runAction()"
+                    :disabled="actionBusy || (confirm.action!=='start' && confirm.typed!==confirm.name)"
+                    class="px-3 py-1 rounded text-white text-sm"
+                    :class="confirm.action==='start' ? 'bg-green-600' : (confirm.action==='stop' ? 'bg-amber-600' : 'bg-blue-600')"
+                    :style="(actionBusy || (confirm.action!=='start' && confirm.typed!==confirm.name)) ? 'opacity:.5;cursor:not-allowed' : ''">
+              <span x-show="!actionBusy">Confirmar</span>
+              <span x-show="actionBusy">Ejecutando…</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div x-show="loading" class="text-slate-500">Cargando…</div>
@@ -476,6 +536,11 @@
           this.route = cd.parseHash();
           window.addEventListener("hashchange", () => { this.route = cd.parseHash(); });
 
+          // Initialize Alpine store so nested views can read identity/permissions.
+          if (window.Alpine && !window.Alpine.store("app")) {
+            window.Alpine.store("app", { user: "", groups: [], role: "", canWrite: false, canAdmin: false });
+          }
+
           // No JS-readable identity from oauth2-proxy in this stack — rely on the audit
           // headers the gateway forwards to BFF, but the browser doesn't see them.
           // Best-effort: use /oauth2/userinfo if available (BackOffice exposes it).
@@ -483,12 +548,16 @@
             const r = await fetch("/oauth2/userinfo", { credentials: "same-origin" });
             if (r.ok) {
               const j = await r.json();
-              const groups = j.groups || (j.preferredUsername ? [] : []);
-              this.user = {
-                user: j.preferredUsername || j.user || j.email || "",
-                groups,
-                role: this._pickRole(j.groups || []),
-              };
+              const groups = j.groups || [];
+              const role = this._pickRole(groups);
+              this.user = { user: j.preferredUsername || j.user || j.email || "", groups, role };
+              if (window.Alpine && window.Alpine.store("app")) {
+                window.Alpine.store("app").user     = this.user.user;
+                window.Alpine.store("app").groups   = groups;
+                window.Alpine.store("app").role     = role;
+                window.Alpine.store("app").canWrite = role === "admin" || role === "operator";
+                window.Alpine.store("app").canAdmin = role === "admin";
+              }
             }
           } catch { /* ignore */ }
 
@@ -597,6 +666,9 @@
         statsEs: null,
         // Inspect
         inspectJson: "",
+        // Actions (Phase D)
+        actionBusy: false,
+        confirm: { open: false, action: "", name: "", typed: "" },
         get route() { return cd.parseHash(); },
         tabs: [
           { id: "overview", label: "Overview" },
@@ -638,6 +710,44 @@
         },
         stateClass(s) {
           return containersView().stateClass(s);
+        },
+        // ---- Actions (Phase D) ----
+        askAction(action) {
+          if (!this.detail) return;
+          if (this.detail.is_protected) {
+            cd.toast("warn", "Container protegido por denylist — no se puede modificar.");
+            return;
+          }
+          this.confirm = { open: true, action, name: this.detail.name, typed: "" };
+        },
+        cancelAction() {
+          this.confirm = { open: false, action: "", name: "", typed: "" };
+        },
+        async runAction() {
+          const { action, name } = this.confirm;
+          if (!action) return;
+          if (action !== "start" && this.confirm.typed !== name) return;
+          this.actionBusy = true;
+          try {
+            const headers = action === "start" ? {} : { "X-Confirm-Resource": name };
+            await cd.call("POST", `/containers/${encodeURIComponent(this.route.id)}/${action}`, { headers });
+            cd.toast("success", `Container ${action === "start" ? "iniciado" : action === "stop" ? "parado" : "reiniciado"}: ${name}`);
+            this.cancelAction();
+            // Poll for state change up to 5s
+            const wantRunning = (action === "start" || action === "restart");
+            for (let i = 0; i < 5; i++) {
+              await new Promise(r => setTimeout(r, 1000));
+              try {
+                const fresh = await cd.call("GET", `/containers/${encodeURIComponent(this.route.id)}`);
+                this.detail = fresh;
+                if ((wantRunning && fresh.state === "running") || (!wantRunning && fresh.state !== "running")) break;
+              } catch { /* ignore */ }
+            }
+          } catch (e) {
+            cd.toast("error", e.message || "Acción fallida");
+          } finally {
+            this.actionBusy = false;
+          }
         },
         // ---- Logs ----
         async reloadLogs() {

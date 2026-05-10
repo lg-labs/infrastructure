@@ -13,10 +13,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
-from ..deps import require_reader
+from ..deps import require_reader, require_writer
 from ..errors import DockerUnavailable
 from ..models.domain import ContainerDetail, ContainersPage, LogsResponse
 from ..repos.docker_repo import get_docker_repo
+from ..safety.confirm import assert_confirm_resource
 
 log = logging.getLogger(__name__)
 
@@ -201,3 +202,57 @@ async def stream_logs(ref: str, request: Request, tail: int = Query(500, ge=0, l
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ---------- Mutations (Phase D) ----------
+#
+# US-4 — start / stop / restart. require_writer (admin|operator).
+#   1. resolve container -> get name
+#   2. denylist check (raises 423)  [in repo]
+#   3. confirm header check (skip for start)  -> 409 if missing/mismatch
+#   4. perform docker action  -> 409 if already_running/already_stopped
+#   5. return new state. Audit middleware logs everything automatically.
+
+
+def _resolve_name(ref: str) -> str:
+    """Resolve a ref (id/name) to canonical name, raising 404 if missing."""
+    c = get_docker_repo()._get_container_or_404(ref)
+    name = c.name or ""
+    return name[1:] if name.startswith("/") else name
+
+
+@router.post(
+    "/{ref}/start",
+    dependencies=[Depends(require_writer)],
+)
+def start_container(ref: str) -> dict[str, Any]:
+    # Start does not require X-Confirm-Resource (design §6.5: start is reversible-trivial).
+    return get_docker_repo().start_container(ref)
+
+
+@router.post(
+    "/{ref}/stop",
+    dependencies=[Depends(require_writer)],
+)
+def stop_container(
+    ref: str,
+    request: Request,
+    timeout_seconds: int = Query(10, ge=1, le=60),
+) -> dict[str, Any]:
+    name = _resolve_name(ref)
+    assert_confirm_resource(request, name)
+    return get_docker_repo().stop_container(ref, timeout_seconds=timeout_seconds)
+
+
+@router.post(
+    "/{ref}/restart",
+    dependencies=[Depends(require_writer)],
+)
+def restart_container(
+    ref: str,
+    request: Request,
+    timeout_seconds: int = Query(10, ge=1, le=60),
+) -> dict[str, Any]:
+    name = _resolve_name(ref)
+    assert_confirm_resource(request, name)
+    return get_docker_repo().restart_container(ref, timeout_seconds=timeout_seconds)

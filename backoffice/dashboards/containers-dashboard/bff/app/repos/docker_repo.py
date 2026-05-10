@@ -18,10 +18,13 @@ from docker.errors import APIError, ImageNotFound as DockerImageNotFound, NotFou
 from requests.exceptions import ConnectionError as ReqConnError, ReadTimeout
 
 from ..errors import (
+    AlreadyRunning,
+    AlreadyStopped,
     ContainerNotFound,
     DockerUnavailable,
     ImageNotFound,
     NetworkNotFound,
+    ProtectedResource,
     VolumeNotFound,
 )
 from ..models.domain import (
@@ -287,6 +290,60 @@ class DockerRepo:
             "daemon_api_version": version.get("ApiVersion"),
             "images_size_mb": round(total_size / 1024 / 1024, 1),
         }
+
+    # ---------- mutations (Phase D) ----------
+
+    def _get_container_or_404(self, ref: str):
+        try:
+            return self.client.containers.get(ref)
+        except NotFound as e:
+            raise ContainerNotFound(ref) from e
+        except (ReqConnError, ReadTimeout) as e:
+            raise DockerUnavailable(str(e)) from e
+
+    def start_container(self, ref: str) -> dict[str, Any]:
+        c = self._get_container_or_404(ref)
+        name = _normalize_name(c)
+        if is_protected(name):
+            raise ProtectedResource(name)
+        c.reload()
+        state = (c.attrs.get("State") or {}).get("Status") or c.status
+        if state == "running":
+            raise AlreadyRunning(name)
+        try:
+            c.start()
+        except APIError as e:
+            raise DockerUnavailable(f"docker start failed: {e}") from e
+        c.reload()
+        return {"name": name, "id": c.id, "state": (c.attrs.get("State") or {}).get("Status")}
+
+    def stop_container(self, ref: str, *, timeout_seconds: int = 10) -> dict[str, Any]:
+        c = self._get_container_or_404(ref)
+        name = _normalize_name(c)
+        if is_protected(name):
+            raise ProtectedResource(name)
+        c.reload()
+        state = (c.attrs.get("State") or {}).get("Status") or c.status
+        if state in ("exited", "created", "dead"):
+            raise AlreadyStopped(name)
+        try:
+            c.stop(timeout=timeout_seconds)
+        except APIError as e:
+            raise DockerUnavailable(f"docker stop failed: {e}") from e
+        c.reload()
+        return {"name": name, "id": c.id, "state": (c.attrs.get("State") or {}).get("Status")}
+
+    def restart_container(self, ref: str, *, timeout_seconds: int = 10) -> dict[str, Any]:
+        c = self._get_container_or_404(ref)
+        name = _normalize_name(c)
+        if is_protected(name):
+            raise ProtectedResource(name)
+        try:
+            c.restart(timeout=timeout_seconds)
+        except APIError as e:
+            raise DockerUnavailable(f"docker restart failed: {e}") from e
+        c.reload()
+        return {"name": name, "id": c.id, "state": (c.attrs.get("State") or {}).get("Status")}
 
 
 # ---------- helpers ----------

@@ -175,34 +175,35 @@ Antes de empezar **cualquier** fase:
 
 ### D.1 — Endpoints mutadores
 
-- [ ] **D.1.1** `app/routers/containers.py` añade `POST /{id}/start`, `/{id}/stop`, `/{id}/restart`.
-- [ ] **D.1.2** Dependency `require_writer` (admin|operator).
-- [ ] **D.1.3** En cada mutador: inspect → name → `assert_not_protected(name)` → `assert_confirm_resource(req, name)` (excepto start) → docker action.
-- [ ] **D.1.4** Manejo de `already_running` / `already_stopped` → 409.
-- [ ] **D.1.5** Query `?timeout_seconds=` validado 1..60.
+- [x] **D.1.1** `app/routers/containers.py` añade `POST /{id}/start`, `/{id}/stop`, `/{id}/restart`.
+- [x] **D.1.2** Dependency `require_writer` (admin|operator).
+- [x] **D.1.3** En cada mutador: inspect → name → `assert_not_protected(name)` → `assert_confirm_resource(req, name)` (excepto start) → docker action.
+- [x] **D.1.4** Manejo de `already_running` / `already_stopped` → 409.
+- [x] **D.1.5** Query `?timeout_seconds=` validado 1..60.
 
 ### D.2 — Audit middleware
 
-- [ ] **D.2.1** `app/middleware/audit.py` (copiar patrón de kafka-dashboard, adaptar `audit_source` y schema).
-- [ ] **D.2.2** Persiste en SQLite (`audit_repo`) **y** loguea en logger `containers_dashboard.audit` (rotating file).
-- [ ] **D.2.3** Sanitización: NO body, NO headers sensibles, sólo identificadores.
-- [ ] **D.2.4** Captura `request_id` de header `X-Request-Id` o genera UUID v4.
+- [x] **D.2.1** `app/middleware/audit.py` (ya implementado en Phase B; reutilizado tal cual para mutaciones).
+- [x] **D.2.2** Persiste en SQLite (`audit_log`) **y** loguea en logger `containers_dashboard.audit` (rotating file).
+- [x] **D.2.3** Sanitización: NO body, NO headers sensibles, sólo identificadores.
+- [x] **D.2.4** Captura `request_id` de header `X-Request-Id` o genera UUID v4.
 
 ### D.3 — UI mutators
 
-- [ ] **D.3.1** En `container-detail` y `containers` list: botones Start/Stop/Restart.
-- [ ] **D.3.2** Botones ocultos si `!user.is_writer` (operator+admin).
-- [ ] **D.3.3** Botones deshabilitados con tooltip "🔒 protegido" si `is_protected`.
-- [ ] **D.3.4** Modal de confirmación: requiere escribir el nombre exacto antes de habilitar el botón "Confirmar".
-- [ ] **D.3.5** Toast de éxito/error con humanizeError.
-- [ ] **D.3.6** Tras éxito, refresh del state del container (poll /api/containers/{id} hasta que cambie state, máx 5s).
+- [x] **D.3.1** En `container-detail`: botones Start/Stop/Restart. *(List-level buttons aplazados a backlog — el detail view ofrece el flujo principal con confirmación.)*
+- [x] **D.3.2** Botones ocultos si `!$store.app.canWrite` (operator+admin).
+- [x] **D.3.3** Botones deshabilitados con tooltip "🔒 protegido" si `is_protected`, y deshabilitados según estado (start solo si !running, stop/restart solo si running).
+- [x] **D.3.4** Modal de confirmación: requiere escribir el nombre exacto antes de habilitar el botón "Confirmar" (excepto start, que es trivialmente reversible).
+- [x] **D.3.5** Toast de éxito/error con humanizeError.
+- [x] **D.3.6** Tras éxito, refresh del state del container (poll /api/containers/{id} hasta cambiar state, máx 5s).
 
 ### D.4 — Smoke tests Fase D
 
-- [ ] **D.4.1** Como `lglabsoperator`: stop+start+restart en un container NO protegido (ej. `metricbeat01` o un container de test). Verificar audit en SQLite y en `backoffice-audit-*` (Kibana).
-- [ ] **D.4.2** Como `lglabsoperator`: intentar stop sobre `lg-infra-backoffice-keycloak` → 423 Locked.
-- [ ] **D.4.3** Como `lglabsoperator`: stop sin `X-Confirm-Resource` → 409 confirmation_required.
-- [ ] **D.4.4** Como `lglabssupport`/`lglabsviewer`: cualquier POST → 403 (gateway).
+- [x] **D.4.1** Como `lglabsoperator`: stop+start+restart en `lg-infra-backoffice-kafka-dashboard-bff` (NO protegido). Verificado audit en SQLite con `(method, path, status, resource_id)` correctos.
+- [x] **D.4.2** Como `lglabsoperator`: stop sobre `lg-infra-backoffice-keycloak` → 423 protected_resource (audit row registrada).
+- [x] **D.4.3** Como `lglabsoperator`: stop sin/wrong `X-Confirm-Resource` → 409 confirmation_required.
+- [x] **D.4.4** Como `lglabsviewer`/`lglabssupport`: POST stop/restart → 403 (gateway, no llega al BFF).
+- [x] **D.4.5** Stop ya parado → 409 already_stopped; start ya corriendo → 409 already_running.
 
 **Cierre Fase D**: US-4 implementada. Audit pipeline E2E funcionando para mutaciones simples.
 
