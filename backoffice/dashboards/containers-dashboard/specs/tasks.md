@@ -28,7 +28,7 @@ Antes de empezar **cualquier** fase:
 
 ### A.1 — Sub-compose con include desde BackOffice
 
-- [ ] **A.1.1** Crear `backoffice/dashboards/containers-dashboard/docker-compose.yml`:
+- [x] **A.1.1** Crear `backoffice/dashboards/containers-dashboard/docker-compose.yml`:
   - `containers-dashboard-fe`: nginx alpine sirviendo `frontend/`.
   - `containers-dashboard-bff`: build local (Dockerfile placeholder), expone `/api/health` con `{"status":"ok"}`.
   - Mount `/var/run/docker.sock:/var/run/docker.sock:rw` en BFF.
@@ -36,17 +36,17 @@ Antes de empezar **cualquier** fase:
   - Volume named `containers-dashboard-data` para SQLite.
   - Healthchecks + memory limits según design §10.
   - Networks: `lg-backoffice` (external).
-- [ ] **A.1.2** Modificar `backoffice/docker-compose.yml` añadiendo entrada al bloque `include:` apuntando a `dashboards/containers-dashboard/docker-compose.yml`.
-- [ ] **A.1.3** Crear `.env.example` con vars del design §9.1.
-- [ ] **A.1.4** Verificar `docker compose -f backoffice/docker-compose.yml up -d` levanta los 2 nuevos servicios sin tocar los demás.
+- [x] **A.1.2** Modificar `backoffice/docker-compose.yml` añadiendo entrada al bloque `include:` apuntando a `dashboards/containers-dashboard/docker-compose.yml`.
+- [x] **A.1.3** Crear `.env.example` con vars del design §9.1.
+- [x] **A.1.4** Verificar `docker compose -f backoffice/docker-compose.yml up -d` levanta los 2 nuevos servicios sin tocar los demás.
 
 **Criterio de cierre**: `docker ps` muestra `lg-infra-backoffice-containers-dashboard-fe` y `lg-infra-backoffice-containers-dashboard-bff` healthy.
 
 ### A.2 — Bloques nginx en gateway
 
-- [ ] **A.2.1** Añadir a `backoffice/home/nginx.conf` los upstreams + 3 locations (frontend, exec WS, API REST/SSE) según design §5.1.
-- [ ] **A.2.2** Implementar authz por método/path. **Empezar con `if`**; si la lógica de combinación falla, refactorizar a `map` (mismo patrón resuelto en kafka-dashboard, ver tasks Fase A.2.2 de kafka). DELETE → admin only; POST → admin|operator; GET → cualquier autenticado.
-- [ ] **A.2.3** Recargar gateway (`docker compose restart gateway`).
+- [x] **A.2.1** Añadir a `backoffice/home/nginx.conf` los upstreams + 3 locations (frontend, exec WS, API REST/SSE) según design §5.1.
+- [x] **A.2.2** Implementar authz por método/path. **Empezar con `if`**; si la lógica de combinación falla, refactorizar a `map` (mismo patrón resuelto en kafka-dashboard, ver tasks Fase A.2.2 de kafka). DELETE → admin only; POST → admin|operator; GET → cualquier autenticado.
+- [x] **A.2.3** Recargar gateway (`docker compose restart gateway`).
 
 **Criterio de cierre**:
 - Como `lglabsadmin`, `GET /containers/` devuelve la home estática (200).
@@ -56,15 +56,15 @@ Antes de empezar **cualquier** fase:
 
 ### A.3 — Tarjeta en home del BackOffice
 
-- [ ] **A.3.1** Modificar `backoffice/home/index.html` añadiendo tarjeta "Containers Dashboard" según design §5.2.
-- [ ] **A.3.2** Visible para los 4 roles.
+- [x] **A.3.1** Modificar `backoffice/home/index.html` añadiendo tarjeta "Containers Dashboard" según design §5.2.
+- [x] **A.3.2** Visible para los 4 roles.
 
 **Criterio de cierre**: login como cualquier rol → tarjeta visible → click → llega a `/containers/` sin re-login.
 
 ### A.4 — Smoke tests Fase A
 
-- [ ] **A.4.1** Crear `specs/smoke-tests.md` con sección "Fase A".
-- [ ] **A.4.2** Ejecutar manualmente con los 4 usuarios; documentar output esperado.
+- [x] **A.4.1** Crear `specs/smoke-tests.md` con sección "Fase A".
+- [x] **A.4.2** Ejecutar manualmente con los 4 usuarios; documentar output esperado.
 
 **Cobertura mínima Fase A**:
 - Tarjeta visible para los 4 roles.

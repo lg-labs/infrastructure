@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Containers Dashboard — lg-labs</title>
+  <link rel="stylesheet" href="./assets/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>📦 Containers Dashboard</h1>
+    <nav>
+      <a href="/">← BackOffice</a>
+      <a href="/portainer/">Portainer</a>
+      <a href="/kafka/">Kafka Dashboard</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="banner banner-warning">
+      ⚠️ Este dashboard tiene acceso completo al daemon Docker del host.
+      Acciones destructivas son irreversibles. Containers críticos del BackOffice
+      están protegidos por denylist (HTTP 423 Locked).
+    </div>
+
+    <section>
+      <h2>🚧 En construcción — Fase A: Andamiaje</h2>
+      <p>
+        Este sub-dashboard está en desarrollo activo siguiendo el flujo Spec-Driven.
+        Las specs viven en
+        <code>backoffice/dashboards/containers-dashboard/specs/</code>.
+      </p>
+      <p>Fases:</p>
+      <ul>
+        <li>✅ Fase 0 — SDD specs</li>
+        <li>🚧 <strong>Fase A — Andamiaje (esta fase)</strong></li>
+        <li>⏳ Fase B — BFF read-only</li>
+        <li>⏳ Fase C — Frontend SPA</li>
+        <li>⏳ Fase D — start/stop/restart</li>
+        <li>⏳ Fase E — Exec shell</li>
+        <li>⏳ Fase F — Remove</li>
+        <li>⏳ Fase G — Audit pipeline E2E</li>
+        <li>⏳ Fase H — Docs + CI</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Health BFF</h2>
+      <pre id="health">cargando…</pre>
+    </section>
+  </main>
+
+  <script>
+    fetch('./api/health')
+      .then(r => r.json())
+      .then(j => document.getElementById('health').textContent = JSON.stringify(j, null, 2))
+      .catch(e => document.getElementById('health').textContent = 'error: ' + e);
+  </script>
+</body>
+</html>

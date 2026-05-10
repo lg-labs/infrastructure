@@ -1,0 +1,84 @@
+# Containers Dashboard sub-stack (Phase A: scaffolding)
+#
+# Sub-compose included from backoffice/docker-compose.yml via `include:`.
+# DOES NOT run standalone — always part of BackOffice.
+#
+# Services:
+#   - containers-dashboard-fe:  nginx serves SPA at /containers/
+#   - containers-dashboard-bff: FastAPI exposes API at /containers/api/
+#                               (mounts /var/run/docker.sock RW — see CONSTITUTION-addendum §B3)
+#
+# Spec: ../specs/design.md §2, §10
+
+name: ${COMPOSE_PROJECT_NAME:-lg-infra-backoffice}
+
+networks:
+  lg-backoffice:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME:-lg-infra-backoffice}_lg-backoffice
+
+volumes:
+  backoffice-containers-dashboard-data:
+    name: backoffice-containers-dashboard-data
+  # Shared with oauth2-proxy + kafka-dashboard + filebeat (declared in
+  # backoffice/docker-compose.yml).
+  backoffice-audit-logs:
+    external: true
+    name: backoffice-audit-logs
+
+services:
+  containers-dashboard-fe:
+    image: nginx:1.27-alpine
+    container_name: lg-infra-backoffice-containers-dashboard-fe
+    hostname: containers-dashboard-fe
+    networks:
+      - lg-backoffice
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${CONTAINERS_DASHBOARD_FE_MEM_LIMIT:-64m}
+
+  containers-dashboard-bff:
+    build:
+      context: ./bff
+      dockerfile: Dockerfile
+    image: lg-infra-backoffice/containers-dashboard-bff:0.1.0
+    container_name: lg-infra-backoffice-containers-dashboard-bff
+    hostname: containers-dashboard-bff
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      SQLITE_PATH: /data/containers-dashboard.sqlite
+      LOG_LEVEL: ${CONTAINERS_DASHBOARD_LOG_LEVEL:-INFO}
+      EXEC_IDLE_TIMEOUT_S: ${CONTAINERS_DASHBOARD_EXEC_IDLE_TIMEOUT_S:-300}
+      DOCKER_API_TIMEOUT_S: ${DOCKER_API_TIMEOUT_S:-10}
+      AUDIT_LOG_PATH: ${CONTAINERS_DASHBOARD_AUDIT_LOG_PATH:-/var/log/backoffice/containers-dashboard-app.log}
+    networks:
+      - lg-backoffice
+    volumes:
+      - backoffice-containers-dashboard-data:/data
+      # CRITICAL: docker.sock RW (read-write) — required for start/stop/restart/exec/remove.
+      # Mitigations: hard-coded denylist + admin-only exec/remove + audit (CONSTITUTION-addendum §B3, §B5).
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      # Phase G: BFF writes audit log to shared volume tailed by Filebeat.
+      - backoffice-audit-logs:/var/log/backoffice
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${CONTAINERS_DASHBOARD_BFF_MEM_LIMIT:-256m}

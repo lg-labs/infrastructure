@@ -8,10 +8,12 @@ name: ${COMPOSE_PROJECT_NAME:-lg-infra-backoffice}
 # Fase E: pipeline audit a ELK
 #
 # Sub-stacks (incluidos via Compose `include:`, requiere v2.20+):
-#   - dashboards/kafka-dashboard: gestión de topics/schemas/ACL-metadata del cluster Kafka
+#   - dashboards/kafka-dashboard:      gestión de topics/schemas/ACL-metadata del cluster Kafka
+#   - dashboards/containers-dashboard: gestión Docker daemon (list/inspect/logs/exec/start-stop-restart/remove)
 
 include:
   - path: ./dashboards/kafka-dashboard/docker-compose.yml
+  - path: ./dashboards/containers-dashboard/docker-compose.yml
 
 networks:
   lg-backoffice:

@@ -1,0 +1,6 @@
+fastapi[standard]==0.115.*
+uvicorn[standard]==0.32.*
+docker==7.1.*
+sqlmodel==0.0.22
+pydantic-settings==2.6.*
+websockets==13.*
