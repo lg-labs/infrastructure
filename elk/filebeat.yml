@@ -20,7 +20,7 @@ filebeat.inputs:
     enabled: true
     id: backoffice-audit
     paths:
-      - /var/log/backoffice/*.log
+      - /var/log/backoffice/oauth2-proxy.log
     parsers:
       - ndjson:
           target: ""
@@ -30,6 +30,32 @@ filebeat.inputs:
       source: backoffice-audit
     fields_under_root: true
     tags: [ "backoffice-audit" ]
+
+  # Kafka Dashboard BFF audit log (Phase F.1)
+  # El BFF (FastAPI) escribe NDJSON en
+  # /var/log/backoffice/kafka-dashboard-app.log (mismo volumen compartido).
+  # Distinguible por `audit_source: kafka-dashboard-bff` dentro del evento.
+  - type: filestream
+    enabled: true
+    id: kafka-dashboard-app
+    paths:
+      - /var/log/backoffice/kafka-dashboard-app*.log
+    # Fingerprint por defecto requiere >=1024 bytes; bajamos el offset/length
+    # para que arranquemos a tail-ear desde el primer evento (los logs de audit
+    # del BFF son pequeños al inicio).
+    prospector.scanner.fingerprint:
+      enabled: true
+      offset: 0
+      length: 64
+    parsers:
+      - ndjson:
+          target: ""
+          overwrite_keys: true
+          add_error_key: true
+    fields:
+      source: kafka-dashboard-app
+    fields_under_root: true
+    tags: [ "kafka-dashboard-app" ]
 
 output.logstash:
   hosts: [ "${HOSTS}" ]

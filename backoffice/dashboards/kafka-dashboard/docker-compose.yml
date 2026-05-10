@@ -21,6 +21,13 @@ networks:
 volumes:
   backoffice-kafka-dashboard-data:
     name: backoffice-kafka-dashboard-data
+  # Volumen compartido con oauth2-proxy + filebeat (declarado en
+  # backoffice/docker-compose.yml). Aquí lo declaramos como `external: true`
+  # con el mismo `name:` para reutilizarlo desde este sub-compose
+  # (Phase F.1: el BFF escribe kafka-dashboard-app.log para Filebeat).
+  backoffice-audit-logs:
+    external: true
+    name: backoffice-audit-logs
 
 services:
   kafka-dashboard-fe:
@@ -63,6 +70,8 @@ services:
     volumes:
       - backoffice-kafka-dashboard-data:/data
       - ./bff/config:/app/config:ro
+      # Phase F.1: escribir audit log al volumen compartido que filebeat tail-ea
+      - backoffice-audit-logs:/var/log/backoffice
     healthcheck:
       test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8000/api/health"]
       interval: 30s

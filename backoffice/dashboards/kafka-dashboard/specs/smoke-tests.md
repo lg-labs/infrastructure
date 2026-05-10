@@ -573,7 +573,125 @@ Heredado de C.6 (mismo script): contenedores BackOffice siguen `healthy` (salvo 
 
 ## Fase F · Audit pipeline
 
-> _Pendiente._
+**Estado**: ✅ PASS (2026-05-10) · 9/9 casos verde · 83/83 unit tests verde.
+
+**Script**: `bff/tests/scripts/smoke-f.sh`.
+**Pre-requisito**: backoffice + kafka-dashboard + ELK (es01, kibana, logstash01, filebeat01) arriba.
+
+**Modelo del pipeline**:
+
+```
+BFF FastAPI
+  ├─ stdout (uvicorn / docker logs)        ← visible en `docker logs`
+  ├─ /var/log/backoffice/kafka-dashboard-app.log  (RotatingFileHandler 50MiB×3)
+  │     ↓ (volumen compartido `backoffice-audit-logs`)
+  │   filebeat01 [filestream id=kafka-dashboard-app, tag=kafka-dashboard-app]
+  │     ↓ logstash01 [if "kafka-dashboard-app" in tags]
+  │   ES índice `backoffice-audit-YYYY.MM.dd` (mismo que oauth2-proxy)
+  │   discriminado por `audit_source: kafka-dashboard-bff`
+  └─ SQLite `audit_log` (cubre L2 con copia local persistente)
+```
+
+### F.1 — BFF tiene volumen `backoffice-audit-logs` montado
+
+```
+backoffice-audit-logs -> /var/log/backoffice  ✓
+```
+
+### F.2 — Filebeat tiene input `kafka-dashboard-app`
+
+Verificado dentro del container `filebeat01`:
+```yaml
+- type: filestream
+  id: kafka-dashboard-app
+  paths:
+    - /var/log/backoffice/kafka-dashboard-app*.log
+```
+
+### F.3 — Logstash tiene branch para tag `kafka-dashboard-app`
+
+```ruby
+} else if "kafka-dashboard-app" in [tags] {
+  # Phase F.2: mismo índice que oauth2-proxy
+  elasticsearch { index => "backoffice-audit-%{+YYYY.MM.dd}" ... }
+}
+```
+
+### F.4 — Generar 100 requests con `X-Request-Id` único
+
+25 iteraciones × 4 roles (admin/operator/support/viewer) → `GET /kafka/api/summary`. Header `X-Request-Id: phase-f-<ns>-<i>-<role>` para correlación posterior.
+
+### F.5 — Eventos llegan al fichero NDJSON
+
+```
+archivo tiene 375 líneas (esperado >= 100)  ✓
+```
+
+Ejemplo de línea (parsed):
+
+```json
+{
+  "audit_source": "kafka-dashboard-bff",
+  "audit_type":   "request",
+  "user":         null,
+  "groups":       ["viewer"],
+  "method":       "GET",
+  "path":         "/api/summary",
+  "original_uri": "/kafka/api/summary",
+  "status":       200,
+  "duration_ms":  4,
+  "request_id":   "phase-f-...-25-viewer"
+}
+```
+
+### F.6 — Persistencia en SQLite con nuevas columnas
+
+```
+fila: ('phase-f-1778412444704557000-25-viewer', 'kafka-dashboard-bff',
+       '/kafka/api/summary', 4, 200, 'GET', '/api/summary')
+✓ schema 002 + middleware OK
+```
+
+Asserts del smoke (Python embebido):
+- `audit_source == 'kafka-dashboard-bff'` ✓
+- `original_uri == '/kafka/api/summary'` ✓ (resuelve L2)
+- `duration_ms is not None` ✓
+
+### F.7 — Eventos llegan a Elasticsearch con tag `kafka-dashboard-app`
+
+```
+docs con request_id phase-f-1778412444704557000*: 100 (esperado >= 1)  ✓
+```
+
+100/100 documentos persistidos en `backoffice-audit-YYYY.MM.dd`.
+
+### F.8 — Doc de ES tiene los campos esperados
+
+```python
+{'audit_source': 'kafka-dashboard-bff',
+ 'original_uri': '/kafka/api/summary',
+ 'status': 200, 'method': 'GET', 'duration_ms': 4}
+```
+
+Asserts del smoke (todos verde):
+- `audit_source == 'kafka-dashboard-bff'`
+- `original_uri.startswith('/kafka/')`
+- `'kafka-dashboard-app' in tags`
+- `audit_type == 'request'`
+- `isinstance(duration_ms, int)`
+
+### F.9 — No regresión en oauth2-proxy
+
+```
+docs oauth2-proxy: 6072 (esperado > 0)  ✓
+```
+
+El input pre-existente para oauth2-proxy se restringió a `oauth2-proxy.log` (antes leía `*.log`); el smoke confirma que sigue ingiriendo correctamente.
+
+### Notas operativas
+
+- Filebeat 8+ por defecto descarta ficheros < 1024 bytes (`prospector.scanner.fingerprint`). Para el nuevo input bajamos a `length: 64` (los logs de audit del BFF empiezan pequeños). Visible en `filebeat01` logs como `"1 file is too small to be ingested"` cuando aún no hay datos suficientes.
+- `request_id` y `audit_source` quedan mapeados como `text` por dynamic mapping — para queries `prefix` use `match_phrase_prefix` (o promueva a keyword en el index template `backoffice-audit` cuando se haga limpieza de mappings).
 
 ---
 

@@ -4,6 +4,8 @@ Routes are mounted under /api/*  (the gateway strips the /kafka/ prefix).
 """
 
 import logging
+import logging.handlers
+import os
 import sys
 from contextlib import asynccontextmanager
 
@@ -22,6 +24,15 @@ from .routers import acl_metadata, health, meta, schemas, summary, topics
 from .settings import settings
 
 
+# Path donde el BFF escribe el audit log NDJSON consumido por Filebeat
+# (volumen compartido `backoffice-audit-logs`, montado como /var/log/backoffice).
+# Configurable vía env para tests; default = path real en producción.
+AUDIT_LOG_PATH = os.environ.get(
+    "KAFKA_DASHBOARD_AUDIT_LOG_PATH",
+    "/var/log/backoffice/kafka-dashboard-app.log",
+)
+
+
 def _setup_logging(level: str) -> None:
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(
@@ -35,6 +46,41 @@ def _setup_logging(level: str) -> None:
     root.setLevel(level.upper())
     # tame noisy libs
     logging.getLogger("kafka").setLevel(logging.WARNING)
+
+    # ---- Audit logger: stdout (heredado del root) + RotatingFileHandler ----
+    # El audit logger ya cuelga del root vía logging.getLogger("kafka_dashboard.audit")
+    # y propaga al StreamHandler de arriba. Adicionalmente escribimos a un fichero
+    # que Filebeat tail-ea (Phase F.1). Si la ruta no existe (p.ej. tests sin
+    # volumen), degradamos a sólo-stdout sin abortar.
+    audit_logger = logging.getLogger("kafka_dashboard.audit")
+    audit_logger.setLevel(logging.INFO)
+
+    try:
+        log_dir = os.path.dirname(AUDIT_LOG_PATH)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+        file_handler = logging.handlers.RotatingFileHandler(
+            AUDIT_LOG_PATH,
+            maxBytes=50 * 1024 * 1024,   # 50 MiB
+            backupCount=3,
+            encoding="utf-8",
+        )
+        # Filebeat parsea NDJSON: el `message` ya es un JSON producido por el
+        # middleware (json.dumps(event)). Para evitar wrapping doble, usamos
+        # un formatter trivial que sólo emite el message tal cual.
+        file_handler.setFormatter(logging.Formatter("%(message)s"))
+        # Reemplaza handlers de fichero previos para que no se dupliquen
+        # entre lifespan reloads.
+        audit_logger.handlers = [
+            h for h in audit_logger.handlers
+            if not isinstance(h, logging.handlers.RotatingFileHandler)
+        ] + [file_handler]
+    except OSError as e:
+        # En desarrollo / tests el path no existe — log y seguir.
+        logging.getLogger("kafka_dashboard.bff").warning(
+            "audit file handler disabled (%s): %s — events go to stdout only",
+            AUDIT_LOG_PATH, e,
+        )
 
 
 @asynccontextmanager

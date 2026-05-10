@@ -242,35 +242,29 @@ Antes de empezar **cualquier** fase:
 
 ### F.1 — Filebeat input
 
-- [ ] **F.1.1** Añadir input `filestream` a `elk/filebeat.yml` para los logs de `kafka-dashboard-bff` (path: `/var/lib/docker/containers/*/...` filtrado por container name, o un volumen de logs si lo separamos — ver §F.1.3).
-- [ ] **F.1.2** Tags: `["kafka-dashboard", "kafka-dashboard-app"]`.
-- [ ] **F.1.3** **Decisión a tomar**: ¿logueamos a stdout (filebeat lee de docker logs) o a un volumen compartido (como hace oauth2-proxy)? Recomendado: stdout + filebeat autodiscover por container label, alineado con el resto del stack ELK (ya filebeat lee logs de containers por defecto).
+- [x] **F.1.1** Añadido input `filestream` adicional en `elk/filebeat.yml` (id `kafka-dashboard-app`) que tail-ea `/var/log/backoffice/kafka-dashboard-app*.log` desde el volumen compartido `backoffice-audit-logs`. El input pre-existente para oauth2-proxy se restringió a `oauth2-proxy.log` (antes leía `*.log`).
+- [x] **F.1.2** Tag `kafka-dashboard-app` + `fields.source: kafka-dashboard-app` (under root).
+- [x] **F.1.3** **Decisión tomada**: fichero en volumen compartido (NO docker autodiscover). Razón: el stack ELK ya consume `backoffice-audit-logs` vía filestream para oauth2-proxy; reutilizar el mismo patrón evita reconfigurar Filebeat en docker-mode. El BFF mantiene además stdout (uvicorn / `docker logs`) sin coste adicional.
+- [x] **F.1.4** Adicional: `prospector.scanner.fingerprint.length: 64` en el nuevo input — los logs de audit empiezan pequeños (<1024 bytes) y el default de Filebeat 8+ bloquea ingesta hasta alcanzar 1024.
 
 ### F.2 — Logstash branch
 
-- [ ] **F.2.1** Añadir condicional en `elk/logstash.conf`:
-  ```
-  } else if "kafka-dashboard-app" in [tags] {
-      elasticsearch {
-          ...
-          index => "backoffice-audit-%{+YYYY.MM.dd}"
-      }
-  }
-  ```
-- [ ] **F.2.2** Restart explícito de logstash (no hot-reload).
+- [x] **F.2.1** Añadida rama condicional en `elk/logstash.conf`: `else if "kafka-dashboard-app" in [tags] { ... index => "backoffice-audit-%{+YYYY.MM.dd}" ... }`. Mismo índice que oauth2-proxy: discriminación vía campo `audit_source` dentro del documento (design §A6: alineado con limitación L2 — la URI original viene en `original_uri`).
+- [x] **F.2.2** Restart de logstash01 (sin hot-reload).
 
 ### F.3 — Audit logger en BFF
 
-- [ ] **F.3.1** `app/audit.py`: middleware FastAPI que loguea cada request en formato design §8.3.
-- [ ] **F.3.2** Sanitización (no body, no valores en diff — design §8.4).
-- [ ] **F.3.3** Persistir tabla `audit_log` en SQLite **además** del stdout (cubre L2 con persistencia local).
+- [x] **F.3.1** Migración `002_audit_log_extend.sql` — añade columnas `request_id, duration_ms, audit_source, original_uri` con índices sobre `request_id` y `audit_source`. Idempotencia garantizada por `_schema_version` (gate del runner; SQLite no soporta `IF NOT EXISTS` en `ALTER TABLE`).
+- [x] **F.3.2** `app/middleware/audit.py` ya existía (Fase B). Extendido el `INSERT` para persistir las 4 nuevas columnas. Bug menor corregido: la columna `path` ahora guarda la ruta del BFF (`/api/summary`) y `original_uri` la del gateway (`/kafka/api/summary`); antes se guardaba `original_uri` en `path`.
+- [x] **F.3.3** `app/main.py::_setup_logging` añade `RotatingFileHandler` (50 MiB × 3 backups) sobre `kafka_dashboard.audit`, escribiendo `/var/log/backoffice/kafka-dashboard-app.log`. Path configurable vía env `KAFKA_DASHBOARD_AUDIT_LOG_PATH` (degrada a stdout-only si no es escribible: caso tests sin volumen).
+- [x] **F.3.4** Sanitización ya en sitio desde Fase B: NO request body, NO secret headers, NO valores en diff (sólo claves cuando aplica — design §8.4).
 
 ### F.4 — Verificación E2E
 
-- [ ] **F.4.1** Crear topic como `lglabsoperator` → buscar en Kibana doc con `audit_source: kafka-dashboard-bff`, `path: /kafka/api/topics`, `status: 201`.
-- [ ] **F.4.2** Verificar que el `path` es la URI original (no `/oauth2/auth`).
+- [x] **F.4.1** Smoke `bff/tests/scripts/smoke-f.sh` (9 casos): mount + filebeat input + logstash branch + 100 requests con `X-Request-Id` distinto + verificación en fichero/SQLite/ES + no-regresión oauth2-proxy. Verde 2026-05-10.
+- [x] **F.4.2** Verificado: `original_uri = /kafka/api/summary` (URI del gateway, no `/oauth2/auth`) — **limitación L2 resuelta para Kafka Dashboard** (queda en backlog extender el patrón al resto del BackOffice).
 
-**Cierre Fase F**: limitación L2 documentada como **mitigada** para Kafka Dashboard (no resuelta a nivel global del BackOffice; se queda en backlog para extender el patrón).
+**Cierre Fase F**: limitación L2 documentada como **mitigada** para Kafka Dashboard. ✅ 83/83 unit tests + 9/9 smoke F.* live PASS (2026-05-10).
 
 ---
 

@@ -68,10 +68,13 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 resource = _extract_resource(request.url.path)
                 with tx() as c:
                     c.execute(
-                        "INSERT INTO audit_log (user, groups, method, path, status, resource) "
-                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO audit_log "
+                        "(user, groups, method, path, status, resource, "
+                        " request_id, duration_ms, audit_source, original_uri) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (user or "anonymous", ",".join(groups), request.method,
-                         original_uri, status, resource),
+                         request.url.path, status, resource,
+                         request_id, duration_ms, "kafka-dashboard-bff", original_uri),
                     )
             except Exception as e:  # pragma: no cover
                 audit_log.warning("could not persist audit row: %s", e)
