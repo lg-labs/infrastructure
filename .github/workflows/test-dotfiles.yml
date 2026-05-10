@@ -266,6 +266,10 @@ jobs:
         working-directory: backoffice/dashboards/containers-dashboard
         run: bash bff/tests/scripts/smoke-g.sh
 
+      - name: ✅ Smoke I — Projects view (Phase I)
+        working-directory: backoffice/dashboards/containers-dashboard
+        run: bash bff/tests/scripts/smoke-i.sh
+
       - name: 📜 Dump logs on failure
         if: failure()
         run: |

@@ -1,6 +1,18 @@
 # Containers Dashboard
 
-> Microfrontend bajo el BackOffice (`/containers/`). Gestión del **daemon Docker del host**: containers, images, volumes, networks, logs y exec shell. SSO + roles heredados del BackOffice. Audit unificado en `backoffice-audit-*`. Coexiste con Portainer (`/portainer/`).
+> Microfrontend bajo el BackOffice (`/containers/`). Gestión del **daemon Docker del host**: containers, images, volumes, networks, logs, exec shell **+ Projects view (Phase I)** con descubrimiento automático de Compose stacks y diagrama de topología renderizado con Mermaid. SSO + roles heredados del BackOffice. Audit unificado en `backoffice-audit-*`. Coexiste con Portainer (`/portainer/`).
+
+## Capacidades (feature matrix)
+
+| ID  | Capacidad                                       | Roles                | Endpoint(s) clave                                           |
+| --- | ----------------------------------------------- | -------------------- | ----------------------------------------------------------- |
+| C-A | Listar/inspeccionar containers, images, volumes, networks | viewer+ | `GET /api/containers`, `/images`, `/volumes`, `/networks`   |
+| C-B | Logs y stats en vivo                            | viewer+              | `GET /api/containers/{id}/logs`, `/stats` (SSE)             |
+| C-C | Start / Stop / Restart                          | admin, operator      | `POST /api/containers/{id}/{start,stop,restart}`            |
+| C-D | Exec shell (WS, idle 5min)                      | admin only           | `WS /api/containers/{id}/exec`                              |
+| C-E | Remove (containers, images, volumes, networks)  | admin only           | `DELETE /api/{kind}/{id}` con `X-Confirm-Resource`          |
+| C-F | Audit unificado en ELK                          | (system)             | `audit_source: containers-dashboard-bff`                    |
+| C-P | **Projects view + topología** (Phase I)         | viewer+              | `GET /api/projects`, `GET /api/projects/{name}` (read-only) |
 
 ## Quickstart
 
@@ -96,6 +108,7 @@ bash bff/tests/scripts/smoke-c.sh   # Read-only + RBAC (12 casos)
 bash bff/tests/scripts/smoke-d.sh   # Mutations start/stop/restart (9 casos)
 bash bff/tests/scripts/smoke-f.sh   # DELETE matrix (13 casos)
 bash bff/tests/scripts/smoke-g.sh   # Audit pipeline E2E (BFF → Filebeat → Logstash → ES) (6 casos)
+bash bff/tests/scripts/smoke-i.sh   # Phase I — Projects view + topology (9 casos)
 ```
 
 CI: job `containers-dashboard-smoke` en `.github/workflows/test-dotfiles.yml` (manual / scheduled).

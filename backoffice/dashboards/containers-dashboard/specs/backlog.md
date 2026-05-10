@@ -172,3 +172,37 @@ Este documento cierra el ciclo SDD del MVP. Captura:
 ---
 
 > _SDD cycle closed for Containers Dashboard MVP._
+
+---
+
+## Phase I — Projects view + topology (entregada)
+
+**Branch / commit:** `feat(containers-dashboard): phase I — projects view + topology`
+
+**Capability**: `C-P` · **User Story**: US-10 · 11 ACs (10.1..10.11) · 9 tareas (I.0..I.5) · 9 smoke cases (I.1..I.8 + I.1.schema).
+
+### Resumen
+
+- **BFF**: nuevo `ProjectsRepo` (descubre projects vía label `com.docker.compose.project`); endpoints read-only `GET /api/projects` (+ `?include_unmanaged=true`) y `GET /api/projects/{name}` (404 si no existe). Star-pattern para co-network/co-volume edges (O(n)). Reusa RBAC (`require_reader`) y audit middleware existentes.
+- **Frontend**: Mermaid 10.9.4 vendored (3.3 MB en `frontend/assets/`). Nueva landing `#/` (Projects), tab top-level "Projects". Detalle `#/projects/<name>` con 4 tabs: **Overview** (tabla services), **Topology** (Mermaid con 3 tipos de edges + checkboxes filtro), **Networks** (accordion), **Volumes** (accordion). Click en nodo → detail container. >20 services: warning + "Render anyway".
+- **Tests**: smoke-i.sh con 9 casos. 49/49 totales (40 previos + 9 nuevos), 0 regresiones.
+- **Docs**: `user-guide.{es,en}.md` §1.4 nuevo + runbook R8. `README.md` (sub-stack y root) actualizan feature matrix con C-P.
+- **CI**: `.github/workflows/test-dotfiles.yml` añade step "Smoke I — Projects view".
+- **Coexistencia**: Portainer y Kafka Dashboard no afectados (smoke G muestra 845 docs kafka-dashboard intactos).
+
+### Decisiones (AD-13.x, ver design.md §13)
+
+- **AD-13.1**: Star pattern (no clique) para co-edges → escalable.
+- **AD-13.2**: Mermaid client-side, sin Node en runtime.
+- **AD-13.3**: `(unmanaged)` opt-in.
+- **AD-13.4**: `/api/projects/*` read-only; mutaciones reusan routers existentes.
+- **AD-13.5**: Projects = landing `#/`; daemon summary movido a `#/home`.
+- **AD-13.6**: Aggregate state desde list-level (sin extra inspect) → p95 < 1s.
+- **AD-13.7**: `bridge` (default) omitida del grafo.
+
+### Próximas iteraciones sugeridas tras Phase I
+
+1. **Persistir filtros de edges en localStorage** (UX, esfuerzo bajo).
+2. **Health checks**: si un service tiene healthcheck configurado, mostrar 🩺 healthy/unhealthy en cards y nodos.
+3. **Mini-grafo en card**: thumbnail Mermaid en cada project card (esfuerzo medio).
+4. **Drill-down a logs agregados** del proyecto (todos los containers concatenados/intercalados).

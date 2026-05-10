@@ -219,7 +219,7 @@ make backoffice-clean
 ```
 
 ## [Start with Containers Dashboard][containers-dashboard-doc]
-Microfrontend del BackOffice (`/containers/`) para gestionar el **daemon Docker del host**: containers, images, volumes, networks; con logs/stats live, exec shell (admin) y remove (admin), todo bajo SSO + roles del BackOffice y audit a `backoffice-audit-*`. Arranca automáticamente con el BackOffice. Coexiste con Portainer (`/portainer/`).
+Microfrontend del BackOffice (`/containers/`) para gestionar el **daemon Docker del host**: containers, images, volumes, networks; con logs/stats live, exec shell (admin) y remove (admin), todo bajo SSO + roles del BackOffice y audit a `backoffice-audit-*`. Incluye **Projects view (Phase I)** que descubre Compose stacks vía labels y renderiza un **diagrama de topología** con Mermaid (services, depends_on, networks, volumes). Arranca automáticamente con el BackOffice. Coexiste con Portainer (`/portainer/`).
 
 ```shell
 make backoffice-up   # incluye containers-dashboard

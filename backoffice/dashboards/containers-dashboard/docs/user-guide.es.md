@@ -90,9 +90,57 @@ Defense-in-depth: **gateway** (nginx) filtra por header `X-Auth-Request-Groups` 
 1. `make backoffice-up` (incluye containers-dashboard).
 2. Abre `http://localhost:8080/containers/`.
 3. Login con `lglabsadmin` / `lgpass` (o cualquiera de los 4 seed users).
-4. Verás el **home** del dashboard con tarjetas (Containers, Images, Volumes, Networks) + summary.
+4. Verás la vista **Projects** (landing) con tarjetas — una por cada proyecto Compose detectado en el host. Para el resumen del daemon clásico, ve a `Home` desde el menú.
 
-## 1.4 Listar containers / images / volumes / networks
+## 1.4 Vista Projects (landing) [Phase I]
+
+La página principal `/containers/` muestra **Projects** — una agrupación automática por `com.docker.compose.project` (label que Compose añade a cada container que crea).
+
+**Cards de proyecto** muestran:
+- Nombre del proyecto.
+- Estado agregado: 🟢 `up` (todos running) · 🟡 `degraded` (algunos parados) · 🔴 `down` (caídos con error) · ⚪ `stopped`.
+- `m / n running` containers.
+- Cuenta de services / networks / volumes.
+
+**Toggle "Include unmanaged"**: muestra el pseudo-proyecto `(unmanaged)` con containers lanzados con `docker run` (sin label compose). Oculto por defecto.
+
+### Detalle de proyecto
+
+Click en una card → `/containers/#/projects/<name>` con 4 tabs:
+
+1. **Overview** — Tabla de services con name · container · state · image · ports. Click en container name → detail page del container (donde están las acciones start/stop/restart/remove).
+2. **Topology** — **Diagrama de componentes** renderizado con Mermaid. Muestra los services como nodos coloreados por estado:
+   - 🟩 verde = running · 🟥 rojo = exited/dead · 🟨 ámbar = paused/restarting · ⬜ gris = otros.
+   - Aristas (3 tipos, cada una con estilo distinto):
+     - **`-->` línea sólida** = `depends_on` declarado en el compose (orden de arranque).
+     - **`-.-> network` punteada** = ambos services comparten esa network (pueden hablar).
+     - **`==> volume` doble línea** = ambos services montan ese volume.
+   - 3 checkboxes en la cabecera permiten ocultar/mostrar cada tipo de arista sin re-fetch.
+   - **Click en un nodo** → te lleva al detail page del container correspondiente.
+   - Si el proyecto tiene > 20 services, el grafo se desactiva por defecto (warning + botón "Render anyway") para evitar lag.
+3. **Networks** — Lista accordion con cada network del proyecto y los services que están en ella.
+4. **Volumes** — Lista accordion con cada volume y los services que lo montan.
+
+### Ejemplo visual
+
+```mermaid
+graph LR
+  gateway["gateway\nlg-infra-backoffice-gateway"]:::cdRunning
+  keycloak["keycloak\nlg-infra-backoffice-keycloak"]:::cdRunning
+  proxy["oauth2-proxy\nlg-infra-backoffice-proxy"]:::cdRunning
+  cdbff["containers-dashboard-bff\nlg-infra-backoffice-containers-dashboard-bff"]:::cdRunning
+  cdfe["containers-dashboard-fe\nlg-infra-backoffice-containers-dashboard-fe"]:::cdRunning
+  gateway -.-|lg-backoffice| keycloak
+  gateway -.-|lg-backoffice| proxy
+  gateway -.-|lg-backoffice| cdbff
+  cdbff -.-|lg-backoffice| cdfe
+  cdbff ==|backoffice-audit-logs| proxy
+  classDef cdRunning fill:#bbf7d0,stroke:#16a34a;
+```
+
+> _Captura conceptual del proyecto `lg-infra-backoffice` con 3 networks (sólo se renderiza una en el ejemplo) y un volume compartido `backoffice-audit-logs`._
+
+## 1.5 Listar containers / images / volumes / networks (vista flat)
 
 - **Containers** (`#/containers`): tabla con state · name · image · compose project · ports. Filtros: búsqueda por texto, "ocultar parados". Click en fila → detalle.
 - **Images** (`#/images`): repository · tag · id_short · size · contadores de containers que la usan.
@@ -411,6 +459,21 @@ curl -s -X POST "http://localhost:8083/keycloak/realms/lglabs/protocol/openid-co
   | python3 -c "import sys,json,base64; t=json.load(sys.stdin)['access_token'].split('.')[1]; print(json.loads(base64.b64decode(t+'==')).get('groups'))"
 # Debe imprimir ['admin']
 ```
+
+### R8 · Diagnosticar un proyecto con la vista Topology [Phase I]
+
+**Síntoma:** un proyecto está `degraded` o `down` y no es obvio qué service rompe la cadena.
+
+```text
+1. Abre /containers/#/projects/<nombre>
+2. Tab "Topology" — el grafo te muestra qué service está rojo (exited).
+3. Click en el nodo rojo → te lleva al detail page del container.
+4. Tab "Logs" del container → identifica la causa raíz.
+5. Si depende de otro service que también está rojo, vuelve a "Topology"
+   con el filtro "depends_on" activo y sigue las flechas hacia atrás.
+```
+
+**Tip:** activa sólo `depends_on` (desactiva networks y volumes) para ver el orden de arranque limpio cuando el grafo es denso.
 
 ## 2.7 Limitaciones conocidas
 

@@ -1,6 +1,6 @@
 # Containers Dashboard — Design
 
-> Versión: 0.3.0 · Estado: Phase I (Projects view) approved · Última actualización: 2026-05-10
+> Versión: 1.0.0 · Estado: Reflects Phase I · Última actualización: 2026-05-10
 >
 > Este documento define **cómo** se construye el Containers Dashboard. El **qué** está en `requirements.md`. Las decisiones inmutables están en `CONSTITUTION-addendum.md` (que hereda `backoffice/CONSTITUTION.md`).
 >

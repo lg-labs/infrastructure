@@ -21,7 +21,7 @@ from .errors import DomainError
 from .middleware.audit import AuditMiddleware
 from .repos.db import run_migrations
 from .repos.docker_repo import get_docker_repo
-from .routers import containers, health, images, networks, summary, volumes
+from .routers import containers, health, images, networks, projects, summary, volumes
 from .routers import exec as exec_router
 from .settings import settings
 
@@ -89,7 +89,7 @@ async def _lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Containers Dashboard BFF",
-        version="0.1.0",
+        version="0.3.0",
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
         lifespan=_lifespan,
@@ -104,6 +104,7 @@ def create_app() -> FastAPI:
     app.include_router(images.router, prefix="/api")
     app.include_router(volumes.router, prefix="/api")
     app.include_router(networks.router, prefix="/api")
+    app.include_router(projects.router, prefix="/api")
     app.include_router(exec_router.router, prefix="/api")
 
     # ---- Error handlers (design.md §7.1 envelope) ----

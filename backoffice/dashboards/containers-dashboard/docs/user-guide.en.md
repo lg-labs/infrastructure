@@ -90,9 +90,57 @@ Defense-in-depth: **gateway** (nginx) filters by `X-Auth-Request-Groups` header 
 1. `make backoffice-up` (includes containers-dashboard).
 2. Open `http://localhost:8080/containers/`.
 3. Login with `lglabsadmin` / `lgpass` (or any of the 4 seed users).
-4. You will see the dashboard **home** with cards (Containers, Images, Volumes, Networks) + summary.
+4. You will see the **Projects** view (landing) with cards — one per Compose project detected on the host. For the classic daemon summary, navigate to `Home` from the menu.
 
-## 1.4 List containers / images / volumes / networks
+## 1.4 Projects view (landing) [Phase I]
+
+The main page `/containers/` shows **Projects** — an automatic grouping by `com.docker.compose.project` (label Compose adds to every container it creates).
+
+**Project cards** show:
+- Project name.
+- Aggregate state: 🟢 `up` (all running) · 🟡 `degraded` (some stopped) · 🔴 `down` (errored) · ⚪ `stopped`.
+- `m / n running` containers.
+- Counts of services / networks / volumes.
+
+**Toggle "Include unmanaged"**: shows the pseudo-project `(unmanaged)` with containers launched via `docker run` (no compose label). Hidden by default.
+
+### Project detail
+
+Click a card → `/containers/#/projects/<name>` with 4 tabs:
+
+1. **Overview** — Services table with name · container · state · image · ports. Click container name → container detail page (where start/stop/restart/remove actions live).
+2. **Topology** — **Component diagram** rendered with Mermaid. Services as nodes colored by state:
+   - 🟩 green = running · 🟥 red = exited/dead · 🟨 amber = paused/restarting · ⬜ grey = others.
+   - Edges (3 types, each with distinct style):
+     - **`-->` solid line** = `depends_on` declared in compose (start order).
+     - **`-.-> network` dashed** = both services share that network (can talk).
+     - **`==> volume` thick line** = both services mount that volume.
+   - 3 checkboxes in the header allow hide/show each edge type without re-fetch.
+   - **Click a node** → opens the container detail page.
+   - If the project has > 20 services, the graph is disabled by default (warning + "Render anyway" button) to prevent lag.
+3. **Networks** — Accordion list of project networks and the services attached to each.
+4. **Volumes** — Accordion list of project volumes and the services that mount each.
+
+### Visual example
+
+```mermaid
+graph LR
+  gateway["gateway\nlg-infra-backoffice-gateway"]:::cdRunning
+  keycloak["keycloak\nlg-infra-backoffice-keycloak"]:::cdRunning
+  proxy["oauth2-proxy\nlg-infra-backoffice-proxy"]:::cdRunning
+  cdbff["containers-dashboard-bff\nlg-infra-backoffice-containers-dashboard-bff"]:::cdRunning
+  cdfe["containers-dashboard-fe\nlg-infra-backoffice-containers-dashboard-fe"]:::cdRunning
+  gateway -.-|lg-backoffice| keycloak
+  gateway -.-|lg-backoffice| proxy
+  gateway -.-|lg-backoffice| cdbff
+  cdbff -.-|lg-backoffice| cdfe
+  cdbff ==|backoffice-audit-logs| proxy
+  classDef cdRunning fill:#bbf7d0,stroke:#16a34a;
+```
+
+> _Conceptual capture of the `lg-infra-backoffice` project with 3 networks (only one rendered in the example) and one shared volume `backoffice-audit-logs`._
+
+## 1.5 List containers / images / volumes / networks (flat view)
 
 - **Containers** (`#/containers`): table state · name · image · compose project · ports. Filters: text search, "hide stopped". Click row → detail.
 - **Images** (`#/images`): repository · tag · id_short · size · count of using containers.
@@ -411,6 +459,21 @@ curl -s -X POST "http://localhost:8083/keycloak/realms/lglabs/protocol/openid-co
   | python3 -c "import sys,json,base64; t=json.load(sys.stdin)['access_token'].split('.')[1]; print(json.loads(base64.b64decode(t+'==')).get('groups'))"
 # Must print ['admin']
 ```
+
+### R8 · Diagnose a project with the Topology view [Phase I]
+
+**Symptom:** a project is `degraded` or `down` and it's not obvious which service breaks the chain.
+
+```text
+1. Open /containers/#/projects/<name>
+2. "Topology" tab — graph shows the red service (exited).
+3. Click the red node → opens the container detail page.
+4. "Logs" tab on the container → identify root cause.
+5. If it depends on another service that is also red, go back to "Topology"
+   with the "depends_on" filter active and follow arrows backwards.
+```
+
+**Tip:** enable only `depends_on` (disable networks and volumes) to see the start order cleanly when the graph is dense.
 
 ## 2.7 Known limitations
 

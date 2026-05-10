@@ -9,6 +9,13 @@
   <link rel="stylesheet" href="/containers/assets/xterm.css" />
   <script src="/containers/assets/xterm.js"></script>
   <script src="/containers/assets/xterm-addon-fit.js"></script>
+  <script src="/containers/assets/mermaid.min.js"></script>
+  <script>
+    // Mermaid 10 — initialize once at page load (Phase I, design.md §13.7)
+    if (window.mermaid) {
+      mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict", flowchart: { htmlLabels: false } });
+    }
+  </script>
   <script defer src="/containers/assets/alpine.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
@@ -26,11 +33,12 @@
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
       <a href="#/" class="text-lg font-semibold hover:underline">📦 Containers Dashboard</a>
       <nav class="flex gap-3 text-sm">
-        <a href="#/"           class="hover:underline" :class="route.view==='home' ? 'text-amber-300' : ''">Inicio</a>
+        <a href="#/"           class="hover:underline" :class="route.view==='projects' || route.view==='project-detail' ? 'text-amber-300' : ''">Projects</a>
         <a href="#/containers" class="hover:underline" :class="route.view==='containers' || route.view==='container-detail' ? 'text-amber-300' : ''">Containers</a>
         <a href="#/images"     class="hover:underline" :class="route.view==='images' ? 'text-amber-300' : ''">Images</a>
         <a href="#/volumes"    class="hover:underline" :class="route.view==='volumes' ? 'text-amber-300' : ''">Volumes</a>
         <a href="#/networks"   class="hover:underline" :class="route.view==='networks' ? 'text-amber-300' : ''">Networks</a>
+        <a href="#/home"       class="hover:underline" :class="route.view==='home' ? 'text-amber-300' : ''">Home</a>
       </nav>
       <div class="flex-1"></div>
       <div class="text-sm flex items-center gap-3">
@@ -61,6 +69,186 @@
   </div>
 
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+
+    <!-- ============== PROJECTS LIST (Phase I — landing) ============== -->
+    <section x-show="route.view==='projects'" x-data="projectsView()" x-init="load()" class="space-y-4">
+      <div class="flex items-baseline gap-4">
+        <h1 class="text-2xl font-semibold">Projects</h1>
+        <p class="text-sm text-slate-500">Containers agrupados por proyecto Compose.</p>
+        <div class="flex-1"></div>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" x-model="includeUnmanaged" @change="load()" class="rounded border-slate-300" />
+          Include unmanaged
+        </label>
+      </div>
+
+      <div x-show="loading" class="text-slate-500">Cargando…</div>
+
+      <div x-show="!loading && projects.length === 0" class="bg-white border rounded p-8 text-center text-slate-500">
+        No hay proyectos para mostrar.
+      </div>
+
+      <div x-show="!loading && projects.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <template x-for="p in projects" :key="p.name">
+          <a :href="`#/projects/${encodeURIComponent(p.name)}`"
+             class="bg-white border rounded shadow-sm hover:shadow-md hover:border-slate-400 transition p-4 block focus:outline-none focus:ring-2 focus:ring-amber-400"
+             role="button" tabindex="0">
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold text-slate-800 truncate" x-text="p.name"></h2>
+              <span :class="{
+                  'bg-green-100 text-green-700':  p.aggregate_status==='up',
+                  'bg-amber-100 text-amber-800': p.aggregate_status==='degraded',
+                  'bg-red-100 text-red-700':     p.aggregate_status==='down',
+                  'bg-slate-200 text-slate-700': p.aggregate_status==='stopped'
+                }"
+                class="text-xs font-semibold px-2 py-0.5 rounded uppercase tracking-wide flex items-center gap-1">
+                <span x-text="{ up:'🟢', degraded:'🟡', down:'🔴', stopped:'⚪' }[p.aggregate_status] || '·'"></span>
+                <span x-text="p.aggregate_status"></span>
+              </span>
+            </div>
+            <div class="mt-2 text-sm text-slate-600 grid grid-cols-2 gap-y-1">
+              <div>Containers</div><div class="text-right" x-text="`${p.containers_running} / ${p.containers_total} running`"></div>
+              <div>Services</div><div class="text-right" x-text="p.services.length"></div>
+              <div>Networks</div><div class="text-right" x-text="p.networks.length"></div>
+              <div>Volumes</div><div class="text-right" x-text="p.volumes.length"></div>
+            </div>
+            <div x-show="p.is_unmanaged" class="mt-2 text-xs text-amber-700">
+              ⚠️ Pseudo-proyecto — containers sin label compose.
+            </div>
+          </a>
+        </template>
+      </div>
+    </section>
+
+    <!-- ============== PROJECT DETAIL (Phase I) ============== -->
+    <section x-show="route.view==='project-detail'" x-data="projectDetailView()" x-init="load(); $watch('route.name', () => load()); $watch('route.tab', t => { if (t==='topology') setTimeout(()=>renderGraph(), 50); })" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <a href="#/" class="text-sm text-slate-600 hover:underline">← Projects</a>
+        <h1 class="text-2xl font-semibold" x-text="route.name"></h1>
+        <span x-show="detail" :class="{
+            'bg-green-100 text-green-700':  detail?.aggregate_status==='up',
+            'bg-amber-100 text-amber-800': detail?.aggregate_status==='degraded',
+            'bg-red-100 text-red-700':     detail?.aggregate_status==='down',
+            'bg-slate-200 text-slate-700': detail?.aggregate_status==='stopped'
+          }"
+          class="text-xs font-semibold px-2 py-0.5 rounded uppercase">
+          <span x-text="detail?.aggregate_status"></span>
+        </span>
+        <div class="flex-1"></div>
+        <button @click="load()" class="text-sm text-slate-600 hover:underline">↻ Refresh</button>
+      </div>
+
+      <div x-show="loading" class="text-slate-500">Cargando…</div>
+
+      <div x-show="!loading && detail">
+        <!-- Tab strip -->
+        <div class="border-b flex gap-1 text-sm">
+          <template x-for="t in ['overview','topology','networks','volumes']" :key="t">
+            <a :href="`#/projects/${encodeURIComponent(route.name)}/${t}`"
+               class="px-3 py-2 border-b-2 -mb-px"
+               :class="route.tab===t ? 'border-amber-500 text-amber-700 font-semibold' : 'border-transparent text-slate-600 hover:text-slate-900'"
+               x-text="t.charAt(0).toUpperCase()+t.slice(1)"></a>
+          </template>
+        </div>
+
+        <!-- Overview tab -->
+        <div x-show="route.tab==='overview'" class="mt-4">
+          <table class="w-full text-sm bg-white border rounded">
+            <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+              <tr>
+                <th class="text-left px-3 py-2">Service</th>
+                <th class="text-left px-3 py-2">Container</th>
+                <th class="text-left px-3 py-2">State</th>
+                <th class="text-left px-3 py-2">Image</th>
+                <th class="text-left px-3 py-2">Ports</th>
+                <th class="text-left px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="s in detail.services" :key="s.container_id">
+                <tr class="border-t">
+                  <td class="px-3 py-2 font-medium" x-text="s.name"></td>
+                  <td class="px-3 py-2">
+                    <a :href="`#/containers/${encodeURIComponent(s.container_id)}`" class="text-blue-700 hover:underline" x-text="s.container"></a>
+                    <span x-show="s.is_protected" class="ml-1 text-xs text-amber-700" title="Protected by denylist">🔒</span>
+                  </td>
+                  <td class="px-3 py-2">
+                    <span :class="{
+                        'bg-green-100 text-green-700':  s.state==='running',
+                        'bg-red-100 text-red-700':     s.state==='exited' || s.state==='dead',
+                        'bg-amber-100 text-amber-800': s.state==='paused' || s.state==='restarting',
+                        'bg-slate-200 text-slate-700': !['running','exited','dead','paused','restarting'].includes(s.state)
+                      }"
+                      class="text-xs px-2 py-0.5 rounded" x-text="s.state"></span>
+                  </td>
+                  <td class="px-3 py-2 text-slate-600 truncate max-w-xs" :title="s.image" x-text="s.image"></td>
+                  <td class="px-3 py-2 text-xs text-slate-600">
+                    <template x-for="p in s.ports" :key="p"><span class="mr-1" x-text="p"></span></template>
+                  </td>
+                  <td class="px-3 py-2 text-right">
+                    <a :href="`#/containers/${encodeURIComponent(s.container_id)}`" class="text-xs text-slate-600 hover:underline">→ detail</a>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Topology tab -->
+        <div x-show="route.tab==='topology'" class="mt-4 space-y-3">
+          <div class="flex items-center gap-4 text-sm">
+            <span class="font-medium">Show:</span>
+            <label class="flex items-center gap-1"><input type="checkbox" x-model="filters.depends_on" @change="renderGraph()" /> depends_on (solid)</label>
+            <label class="flex items-center gap-1"><input type="checkbox" x-model="filters.network" @change="renderGraph()" /> networks (dashed)</label>
+            <label class="flex items-center gap-1"><input type="checkbox" x-model="filters.volume" @change="renderGraph()" /> volumes (thick)</label>
+            <button @click="renderGraph(true)" class="ml-auto text-xs px-2 py-1 border rounded hover:bg-slate-100">Re-render</button>
+          </div>
+          <div x-show="(detail?.services?.length || 0) > 20 && !graphForced" class="bg-amber-50 border border-amber-300 rounded p-3 text-sm">
+            ⚠️ Graph disabled — too many nodes (<span x-text="detail.services.length"></span>).
+            <button @click="graphForced=true; renderGraph()" class="ml-2 underline">Render anyway</button>
+          </div>
+          <div id="cd-graph" class="bg-white border rounded p-4 overflow-auto" style="min-height: 300px"></div>
+          <p class="text-xs text-slate-500">Click en un nodo para ir al detail del container.</p>
+        </div>
+
+        <!-- Networks tab -->
+        <div x-show="route.tab==='networks'" class="mt-4 space-y-2">
+          <template x-for="n in detail.networks" :key="n.name">
+            <div class="bg-white border rounded p-3">
+              <div class="flex items-center gap-2">
+                <a :href="`#/networks`" class="font-medium text-blue-700 hover:underline" x-text="n.name"></a>
+                <span x-show="n.is_builtin" class="text-xs px-2 py-0.5 rounded bg-slate-200 text-slate-700">builtin</span>
+                <span class="ml-auto text-xs text-slate-500" x-text="`${n.services_in.length} services`"></span>
+              </div>
+              <div class="mt-1 text-sm text-slate-600">
+                <template x-for="s in n.services_in" :key="s">
+                  <span class="inline-block mr-2 px-2 py-0.5 bg-slate-100 rounded text-xs" x-text="s"></span>
+                </template>
+              </div>
+            </div>
+          </template>
+          <div x-show="detail.networks.length === 0" class="text-slate-500 text-sm">— Sin networks —</div>
+        </div>
+
+        <!-- Volumes tab -->
+        <div x-show="route.tab==='volumes'" class="mt-4 space-y-2">
+          <template x-for="v in detail.volumes" :key="v.name">
+            <div class="bg-white border rounded p-3">
+              <div class="flex items-center gap-2">
+                <a :href="`#/volumes`" class="font-medium text-blue-700 hover:underline" x-text="v.name"></a>
+                <span class="ml-auto text-xs text-slate-500" x-text="`${v.services_using.length} services`"></span>
+              </div>
+              <div class="mt-1 text-sm text-slate-600">
+                <template x-for="s in v.services_using" :key="s">
+                  <span class="inline-block mr-2 px-2 py-0.5 bg-slate-100 rounded text-xs" x-text="s"></span>
+                </template>
+              </div>
+            </div>
+          </template>
+          <div x-show="detail.volumes.length === 0" class="text-slate-500 text-sm">— Sin volumes —</div>
+        </div>
+      </div>
+    </section>
 
     <!-- ============== HOME VIEW (summary) ============== -->
     <section x-show="route.view==='home'" x-data="homeView()" x-init="load()" class="space-y-6">
@@ -1258,6 +1446,121 @@
           try { if (this.term) this.term.dispose(); } catch {}
           this.term = null;
           this.fitAddon = null;
+        },
+      };
+    }
+
+    // ============== Phase I — Projects =====================================
+
+    function projectsView() {
+      return {
+        loading: true,
+        projects: [],
+        includeUnmanaged: false,
+        async load() {
+          this.loading = true;
+          try {
+            const qs = this.includeUnmanaged ? "?include_unmanaged=true" : "";
+            this.projects = await cd.call("GET", `/projects${qs}`);
+          } catch (e) {
+            cd.toast("error", e.message || "No se pudo cargar la lista de proyectos");
+            this.projects = [];
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+
+    function projectDetailView() {
+      return {
+        loading: true,
+        detail: null,
+        graphForced: false,
+        filters: { depends_on: true, network: true, volume: true },
+        get route() { return cd.parseHash(); },
+        async load() {
+          this.loading = true;
+          this.detail = null;
+          try {
+            const name = this.route.name;
+            this.detail = await cd.call("GET", `/projects/${encodeURIComponent(name)}`);
+            // Auto-render graph if topology tab is active
+            if (this.route.tab === "topology") setTimeout(() => this.renderGraph(), 50);
+          } catch (e) {
+            cd.toast("error", e.message || "No se pudo cargar el proyecto");
+          } finally {
+            this.loading = false;
+          }
+        },
+        async renderGraph(force = false) {
+          if (!this.detail) return;
+          if (force) this.graphForced = true;
+          const tooBig = this.detail.services.length > 20;
+          if (tooBig && !this.graphForced) return;
+
+          const el = document.getElementById("cd-graph");
+          if (!el || !window.mermaid) return;
+
+          const stateClass = (st) => {
+            if (st === "running") return "cdRunning";
+            if (st === "exited" || st === "dead") return "cdExited";
+            if (st === "paused" || st === "restarting") return "cdPaused";
+            return "cdOther";
+          };
+          const sanitize = (s) => String(s || "").replace(/[^A-Za-z0-9_]/g, "_");
+          const lines = ["graph LR"];
+          // Nodes
+          for (const s of this.detail.services) {
+            const id = sanitize(s.name);
+            const label = `${s.name}\\n${s.container}`.replace(/"/g, "'");
+            lines.push(`  ${id}["${label}"]:::${stateClass(s.state)}`);
+          }
+          // Edges (filtered)
+          for (const e of this.detail.graph.edges) {
+            if (!this.filters[e.type]) continue;
+            const f = sanitize(e.from);
+            const t = sanitize(e.to);
+            let arrow, label = "";
+            if (e.type === "depends_on") arrow = "-->";
+            else if (e.type === "network") { arrow = "-.->"; label = `|${(e.meta?.network || "net")}|`; }
+            else if (e.type === "volume")  { arrow = "==>";  label = `|${(e.meta?.volume  || "vol")}|`; }
+            else continue;
+            lines.push(`  ${f} ${arrow}${label} ${t}`);
+          }
+          // Class defs
+          lines.push("  classDef cdRunning fill:#bbf7d0,stroke:#16a34a;");
+          lines.push("  classDef cdExited  fill:#fecaca,stroke:#dc2626;");
+          lines.push("  classDef cdPaused  fill:#fde68a,stroke:#d97706;");
+          lines.push("  classDef cdOther   fill:#e5e7eb,stroke:#6b7280;");
+
+          const code = lines.join("\n");
+          try {
+            // Re-init each render to ensure clean state
+            const id = "cdGraph_" + Date.now();
+            const { svg } = await mermaid.render(id, code);
+            el.innerHTML = svg;
+            // Click handlers — map node id (sanitized service name) → container_id
+            const idToContainer = {};
+            for (const s of this.detail.services) {
+              idToContainer[sanitize(s.name)] = s.container_id;
+            }
+            el.querySelectorAll("g.node").forEach((node) => {
+              node.style.cursor = "pointer";
+              const idAttr = node.id || "";
+              // mermaid generates ids like "flowchart-<svc>-<num>"
+              const m = idAttr.match(/^flowchart-([^-]+)/);
+              const svcId = m ? m[1] : "";
+              const cid = idToContainer[svcId];
+              if (!cid) return;
+              node.addEventListener("click", () => {
+                location.hash = `#/containers/${encodeURIComponent(cid)}`;
+              });
+            });
+          } catch (err) {
+            cd.toast("error", "Mermaid render failed: " + (err.message || err));
+            el.textContent = "Error rendering graph";
+          }
         },
       };
     }

@@ -102,13 +102,27 @@ window.cd = (function () {
   //   #/containers               containers list
   //   #/containers/<id>          container detail (default tab: overview)
   //   #/containers/<id>/<tab>    container detail with tab (overview|logs|stats|inspect)
-  //   #/images                   images list
-  //   #/volumes                  volumes list
-  //   #/networks                 networks list
+  //   #/                          projects list (landing — Phase I)
+  //   #/projects/<name>           project detail (Phase I) — tabs: overview|topology|networks|volumes
+  //   #/home                      daemon home/summary
+  //   #/containers                containers list
+  //   #/containers/<id>           container detail (tabs: overview|logs|stats|inspect)
+  //   #/containers/<id>/exec      exec shell (admin)
+  //   #/images                    images list
+  //   #/volumes                   volumes list
+  //   #/networks                  networks list
   function parseHash() {
     const h = (location.hash || "#/").slice(1);
     const parts = h.split("/").filter(Boolean);
-    if (parts.length === 0) return { view: "home" };
+    if (parts.length === 0) return { view: "projects" };
+    if (parts[0] === "home") return { view: "home" };
+    if (parts[0] === "projects" && parts.length === 1) return { view: "projects" };
+    if (parts[0] === "projects" && parts.length >= 2) {
+      const name = decodeURIComponent(parts[1]);
+      const allowed = ["overview", "topology", "networks", "volumes"];
+      const tab = (parts[2] && allowed.includes(parts[2])) ? parts[2] : "overview";
+      return { view: "project-detail", name, tab };
+    }
     if (parts[0] === "containers" && parts.length === 1) return { view: "containers" };
     if (parts[0] === "containers" && parts.length >= 2) {
       const id = decodeURIComponent(parts[1]);
@@ -120,7 +134,7 @@ window.cd = (function () {
     if (parts[0] === "images")   return { view: "images" };
     if (parts[0] === "volumes")  return { view: "volumes" };
     if (parts[0] === "networks") return { view: "networks" };
-    return { view: "home" };
+    return { view: "projects" };
   }
 
   function navigate(path) {

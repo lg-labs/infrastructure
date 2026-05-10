@@ -63,6 +63,11 @@ class NetworkNotFound(DomainError):
         super().__init__(404, "network_not_found", f"network {ref!r} not found", {"ref": ref})
 
 
+class ProjectNotFound(DomainError):
+    def __init__(self, name: str):
+        super().__init__(404, "project_not_found", f"project {name!r} not found", {"name": name})
+
+
 # ---------- 409 ----------
 class ConfirmationRequired(DomainError):
     def __init__(self, expected: str):
