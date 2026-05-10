@@ -1,6 +1,6 @@
 # Kafka Dashboard — Tasks
 
-> Versión: 0.1.0 · Estado: Draft · Última actualización: 2026-05-10
+> Versión: 1.0.0 · Estado: MVP Completed · Última actualización: 2026-05-10
 >
 > Plan de implementación. Cada fase tiene **entregables verificables** y **criterio de cierre**. No se cierra una fase sin smoke test pasando + spec actualizado.
 >
@@ -304,12 +304,12 @@ Antes de empezar **cualquier** fase:
 
 **Objetivo**: cerrar el ciclo SDD con backlog y trazabilidad inversa.
 
-- [ ] **H.1** Bumpar versiones: `requirements.md` → 0.2.0 "MVP Implemented", `design.md` → 0.2.0 "Reflects implementation", `tasks.md` → 1.0.0 "MVP Completed".
-- [ ] **H.2** Crear `backoffice/dashboards/kafka-dashboard/specs/backlog.md` con:
+- [x] **H.1** Bumpar versiones: `requirements.md` → 0.2.0 "MVP Implemented", `design.md` → 0.2.0 "Reflects implementation", `tasks.md` → 1.0.0 "MVP Completed".
+- [x] **H.2** Crear `backoffice/dashboards/kafka-dashboard/specs/backlog.md` con:
   - **A. Capabilities pospuestas**: producir/consumir mensajes desde UI (delegado a AKHQ), métricas, multi-cluster, Connect.
   - **B. Mejoras técnicas**: ACLs reales (cuando authorizer activo, ver §A6), refactor nginx `if`→`map` si quedó pendiente, cache de cluster metadata si latencia molesta, multi-language i18n.
   - **C. Trazabilidad inversa**: cada US del MVP → fases/tasks que la implementan; cada decisión técnica → archivo donde vive.
-- [ ] **H.3** Commit final `feat(kafka-dashboard): add MVP for topic/schema/ACL-metadata management`.
+- [x] **H.3** Commit final `feat(kafka-dashboard): phase H — SDD retrospective + backlog`.
 
 **Cierre Fase H**: ciclo SDD cerrado.
 
