@@ -1,0 +1,27 @@
+# Kafka Dashboard — Topic owners catalog
+#
+# Versioned alongside the BFF. Changes go via PR (see CONSTITUTION-addendum §A1
+# and requirements.md §7.2). The dropdown in the UI is populated from this file.
+#
+# Schema:
+#   owners:
+#     - id: <kebab-case>     # required, must match ^[a-z0-9-]+$, unique
+#       name: <display>      # required
+#       contact: <email>     # required
+#
+# If this file is malformed at boot, the BFF exits 1 (fail-fast).
+# If empty, the UI blocks topic creation with a clear error.
+
+owners:
+  - id: team-platform
+    name: "Plataforma"
+    contact: "platform@lglabs.local"
+  - id: team-data
+    name: "Datos & Analítica"
+    contact: "data@lglabs.local"
+  - id: team-payments
+    name: "Pagos"
+    contact: "payments@lglabs.local"
+  - id: team-identity
+    name: "Identidad & Acceso"
+    contact: "identity@lglabs.local"

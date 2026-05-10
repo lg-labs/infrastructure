@@ -1,0 +1,9 @@
+# Pinned to minor so security patches apply on rebuild
+fastapi[standard]==0.115.*
+pydantic==2.9.*
+pydantic-settings==2.6.*
+sqlmodel==0.0.22
+kafka-python==2.0.*
+httpx==0.27.*
+PyYAML==6.0.*
+python-json-logger==2.0.*

@@ -83,52 +83,52 @@ Antes de empezar **cualquier** fase:
 
 ### B.1 — BFF skeleton FastAPI
 
-- [ ] **B.1.1** `bff/Dockerfile` (Python 3.12-slim, multi-stage si reduce tamaño).
-- [ ] **B.1.2** `bff/requirements.txt`: `fastapi[standard]==0.115.*`, `kafka-python==2.0.*`, `httpx`, `sqlmodel`, `pydantic-settings`, `pyyaml`.
-- [ ] **B.1.3** Estructura `bff/app/` según design §2.3.
-- [ ] **B.1.4** `app/main.py` con FastAPI factory, OpenAPI en `/api/openapi.json`.
-- [ ] **B.1.5** `app/deps.py`: dep que extrae `X-Auth-Request-User` y `X-Auth-Request-Groups`, expone `current_user` y `current_groups`.
-- [ ] **B.1.6** `app/settings.py`: vars del design §9.3, validación al arrancar.
+- [x] **B.1.1** `bff/Dockerfile` (Python 3.12-slim, multi-stage si reduce tamaño).
+- [x] **B.1.2** `bff/requirements.txt`: `fastapi[standard]==0.115.*`, `kafka-python==2.0.*`, `httpx`, `sqlmodel`, `pydantic-settings`, `pyyaml`.
+- [x] **B.1.3** Estructura `bff/app/` según design §2.3.
+- [x] **B.1.4** `app/main.py` con FastAPI factory, OpenAPI en `/api/openapi.json`.
+- [x] **B.1.5** `app/deps.py`: dep que extrae `X-Auth-Request-User` y `X-Auth-Request-Groups`, expone `current_user` y `current_groups`.
+- [x] **B.1.6** `app/settings.py`: vars del design §9.3, validación al arrancar.
 
 ### B.2 — owners.yaml loader
 
-- [ ] **B.2.1** `app/owners.py`: carga + valida YAML al arrancar (fail-fast si malformado).
-- [ ] **B.2.2** Endpoint interno `GET /api/_owners` que lista los owners (lo usa el frontend para el dropdown).
-- [ ] **B.2.3** Crear `bff/config/owners.yaml` con 3-4 owners de ejemplo (ver requirements §7.2).
+- [x] **B.2.1** `app/owners.py`: carga + valida YAML al arrancar (fail-fast si malformado).
+- [x] **B.2.2** Endpoint interno `GET /api/_owners` que lista los owners (lo usa el frontend para el dropdown).
+- [x] **B.2.3** Crear `bff/config/owners.yaml` con 3-4 owners de ejemplo (ver requirements §7.2).
 
 ### B.3 — SQLite migrations
 
-- [ ] **B.3.1** `app/repos/migrations/001_initial.sql` con DDL design §4.1.
-- [ ] **B.3.2** Runner idempotente al arrancar (lee `_schema_version`).
-- [ ] **B.3.3** Verificar que el volume `kafka-dashboard-data` persiste tras restart.
+- [x] **B.3.1** `app/repos/migrations/001_initial.sql` con DDL design §4.1.
+- [x] **B.3.2** Runner idempotente al arrancar (lee `_schema_version`).
+- [x] **B.3.3** Verificar que el volume `kafka-dashboard-data` persiste tras restart.
 
 ### B.4 — Kafka repo
 
-- [ ] **B.4.1** `app/repos/kafka_repo.py`: wrapper sobre `KafkaAdminClient`.
-- [ ] **B.4.2** Métodos: `list_topics`, `describe_topic`, `create_topic`, `alter_configs`, `create_partitions`, `delete_topic`.
-- [ ] **B.4.3** Mapeo de exceptions a HTTP según design §7.3 — implementado como decorador o middleware.
-- [ ] **B.4.4** Reintentos con backoff para `KafkaTimeoutError` / `NoBrokersAvailable`.
+- [x] **B.4.1** `app/repos/kafka_repo.py`: wrapper sobre `KafkaAdminClient`.
+- [x] **B.4.2** Métodos: `list_topics`, `describe_topic`, `create_topic`, `alter_configs`, `create_partitions`, `delete_topic`.
+- [x] **B.4.3** Mapeo de exceptions a HTTP según design §7.3 — implementado como decorador o middleware.
+- [x] **B.4.4** Reintentos con backoff para `KafkaTimeoutError` / `NoBrokersAvailable`.
 
 ### B.5 — Endpoints topics
 
-- [ ] **B.5.1** `app/routers/topics.py` con 6 endpoints (design §3.3).
-- [ ] **B.5.2** Validaciones server-side completas (regex `lglabs.*`, owner ∈ YAML, RF ≤ brokers, etc.).
-- [ ] **B.5.3** Header `X-Confirm-Resource` en DELETE.
-- [ ] **B.5.4** Audit logger (stdout JSON) en cada mutación.
-- [ ] **B.5.5** `app/routers/summary.py` con `GET /api/summary` (US-8).
-- [ ] **B.5.6** `app/routers/export.py` con `GET /api/topics/{name}/export`.
+- [x] **B.5.1** `app/routers/topics.py` con 6 endpoints (design §3.3).
+- [x] **B.5.2** Validaciones server-side completas (regex `lglabs.*`, owner ∈ YAML, RF ≤ brokers, etc.).
+- [x] **B.5.3** Header `X-Confirm-Resource` en DELETE.
+- [x] **B.5.4** Audit logger (stdout JSON) en cada mutación.
+- [x] **B.5.5** `app/routers/summary.py` con `GET /api/summary` (US-8).
+- [x] **B.5.6** `app/routers/export.py` con `GET /api/topics/{name}/export`.
 
 ### B.6 — Tests de contrato
 
-- [ ] **B.6.1** `bff/tests/contract/test_topics.py`: matriz role × endpoint × status (design §6).
-- [ ] **B.6.2** Cubre AC-1.1..AC-4.5 (de US-1 a US-4) y AC-9.1.
+- [x] **B.6.1** `bff/tests/contract/test_topics.py`: matriz role × endpoint × status (design §6).
+- [x] **B.6.2** Cubre AC-1.1..AC-4.5 (de US-1 a US-4) y AC-9.1.
 - [ ] **B.6.3** Run en CI (añadir job a `.github/workflows/test-dotfiles.yml`).
 
 ### B.7 — Smoke tests Fase B
 
-- [ ] **B.7.1** Añadir sección "Fase B" a `smoke-tests.md` propio.
-- [ ] **B.7.2** Crear topic `lglabs.smoke.test`, listar, editar retención, borrar con confirmación. Como `lglabsadmin` y `lglabsoperator`.
-- [ ] **B.7.3** Verificar 403s correctos para `lglabssupport` y `lglabsviewer`.
+- [x] **B.7.1** Añadir sección "Fase B" a `smoke-tests.md` propio.
+- [x] **B.7.2** Crear topic `lglabs.smoke.test`, listar, editar retención, borrar con confirmación. Como `lglabsadmin` y `lglabsoperator`.
+- [x] **B.7.3** Verificar 403s correctos para `lglabssupport` y `lglabsviewer`.
 - [ ] **B.7.4** Verificar entrada en `backoffice-audit-*` con `audit_source: kafka-dashboard-bff`.
 
 **Cierre Fase B**: 

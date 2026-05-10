@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# SQLite (runtime data goes in named volume)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Local-only env file (use .env.example for the template)
+.env

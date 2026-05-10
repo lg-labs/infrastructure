@@ -45,36 +45,24 @@ services:
           memory: ${KAFKA_DASHBOARD_FE_MEM_LIMIT:-64m}
 
   kafka-dashboard-bff:
-    image: python:3.12-alpine
+    build:
+      context: ./bff
+      dockerfile: Dockerfile
+    image: lg-infra-backoffice/kafka-dashboard-bff:0.1.0
     container_name: lg-infra-backoffice-kafka-dashboard-bff
     hostname: kafka-dashboard-bff
-    # Fase A: placeholder. Fase B reemplazará por build local con FastAPI.
-    command:
-      - sh
-      - -c
-      - |
-        pip install --quiet --no-cache-dir 'fastapi[standard]==0.115.*' && \
-        cat > /tmp/main.py <<'EOF'
-        from fastapi import FastAPI, Header
-        app = FastAPI(title="kafka-dashboard-bff", version="0.0.1-placeholder")
-
-        @app.get("/api/health")
-        def health():
-            return {"status": "ok", "kafka": "unknown", "registry": "unknown", "sqlite": "unknown", "phase": "A-placeholder"}
-
-        @app.get("/api/whoami")
-        def whoami(
-            x_auth_request_user: str | None = Header(default=None),
-            x_auth_request_groups: str | None = Header(default=None),
-        ):
-            return {"user": x_auth_request_user, "groups": x_auth_request_groups}
-        EOF
-        cd /tmp && fastapi run main.py --host 0.0.0.0 --port 8000
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka1:29092,kafka2:29092,kafka3:29092}
+      SCHEMA_REGISTRY_URL: ${SCHEMA_REGISTRY_URL:-http://schema-registry:8081}
+      SQLITE_PATH: /data/kafka-dashboard.sqlite
+      OWNERS_YAML_PATH: /app/config/owners.yaml
+      LOG_LEVEL: ${KAFKA_DASHBOARD_LOG_LEVEL:-INFO}
     networks:
       - lg-backoffice
       - lg-infra-kafka_default
     volumes:
       - backoffice-kafka-dashboard-data:/data
+      - ./bff/config:/app/config:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8000/api/health"]
       interval: 30s

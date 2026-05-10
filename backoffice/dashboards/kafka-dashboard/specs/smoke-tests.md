@@ -161,7 +161,99 @@ curl -sS -o /dev/null -w "Kibana admin: %{http_code}\n" -H "Authorization: Beare
 
 ## Fase B · BFF Topics CRUD
 
-> _Pendiente — se completará al cerrar Fase B._
+**Estado:** ✅ PASS (2026-05-10) · imagen `lg-infra-backoffice/kafka-dashboard-bff:0.1.0`
+
+### B.1 — Build de la imagen y arranque limpio
+
+```bash
+docker compose -f backoffice/docker-compose.yml build kafka-dashboard-bff
+docker compose -f backoffice/docker-compose.yml up -d kafka-dashboard-bff
+sleep 6
+docker ps --filter name=kafka-dashboard-bff --format "{{.Status}}"
+# → "Up X seconds (healthy)"
+docker logs lg-infra-backoffice-kafka-dashboard-bff 2>&1 | grep -E "owners loaded|migrations applied|kafka-dashboard-bff ready"
+# → 3 líneas JSON (lifespan ok)
+```
+
+### B.2 — `/api/health` responde `kafka: ok` (BFF conectado al cluster real)
+
+```bash
+curl -fsS http://localhost:8080/kafka/api/health | python3 -m json.tool
+```
+
+Esperado:
+
+```json
+{"status":"ok","kafka":"ok","registry":"unknown","sqlite":"ok"}
+```
+
+### B.3 — Tests unitarios / contract suite
+
+```bash
+cd backoffice/dashboards/kafka-dashboard/bff
+python3 -m venv /tmp/kd-venv && /tmp/kd-venv/bin/pip install -q -r requirements.txt -r tests/requirements-test.txt
+/tmp/kd-venv/bin/pytest -q
+# → 41 passed
+```
+
+### B.4 — Matriz role × endpoint contra el cluster real
+
+Setup tokens (refrescar si pasan >60s):
+
+```bash
+for role in admin operator support viewer; do
+  curl -sf -X POST "http://localhost:8083/keycloak/realms/lglabs/protocol/openid-connect/token" \
+    -d "grant_type=password" -d "client_id=oauth2-proxy" -d "client_secret=lgpass-oidc-secret-change-me" \
+    -d "username=lglabs${role}" -d "password=lgpass" \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])" > /tmp/kd-token-${role}
+done
+```
+
+Matriz esperada (HTTP status):
+
+| Endpoint                              | Method | viewer | support | operator | admin |
+|---------------------------------------|--------|--------|---------|----------|-------|
+| `/kafka/api/topics`                   | GET    | 200    | 200     | 200      | 200   |
+| `/kafka/api/_owners`                  | GET    | 200    | 200     | 200      | 200   |
+| `/kafka/api/summary`                  | GET    | 200    | 200     | 200      | 200   |
+| `/kafka/api/topics`                   | POST   | 403    | 403     | **201**  | 201   |
+| `/kafka/api/topics/<n>`               | PATCH  | 403    | 403     | 200      | 200   |
+| `/kafka/api/topics/<n>` sin confirm   | DELETE | 403    | 403     | **409**  | 409   |
+| `/kafka/api/topics/<n>` con confirm   | DELETE | 403    | 403     | **204**  | 204   |
+| `/kafka/api/topics/__consumer_offsets` con confirm | DELETE | 403 | 403 | 403 | **403** (`internal_topic_protected`) |
+| `/kafka/api/topics/<n>/export`        | GET    | 403    | 403     | 200      | 200   |
+
+Script ejecutable: `bff/tests/scripts/smoke-b7.sh` (ver repo).
+
+### B.5 — Validaciones de negocio (CRUD)
+
+- POST con `name` que NO empieza por `lglabs.` → **422** `validation_error`.
+- POST con `owner` no presente en `owners.yaml` → **400** `invalid_owner` con `details.valid_owners`.
+- POST duplicado → **409** `topic_already_exists`.
+- POST con `description` < 10 chars → **422**.
+- POST con `partitions > 100` → **422**.
+- PATCH `partitions` decreciente → **400** `invalid_partitions`.
+- PATCH `cleanup_policy=compact` + `retention_ms=86400000` → reflejado en `configs` del describe.
+
+### B.6 — Audit log persistido en SQLite
+
+```bash
+docker exec lg-infra-backoffice-kafka-dashboard-bff python3 -c \
+  "import sqlite3; c=sqlite3.connect('/data/kafka-dashboard.sqlite'); \
+   [print(r) for r in c.execute('SELECT user,method,status,resource FROM audit_log ORDER BY id DESC LIMIT 8').fetchall()]"
+```
+
+Esperado: filas con `method`, `status`, `resource` correctos para cada request.
+
+> **Limitación conocida — Bearer flow:** con `Authorization: Bearer <token>`, oauth2-proxy valida el JWT pero no inyecta `X-Auth-Request-User`, por lo que el campo `user` queda como `"anonymous"` en el audit. En el flujo real de UI (cookie/sesión), la cabecera SÍ se propaga. Mejora para Fase F: derivar identidad del JWT cuando el header esté ausente.
+
+### B.7 — Sin regresiones en BackOffice
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "backoffice|portainer|keycloak|gateway"
+```
+
+Todos `Up X (healthy)` excepto el conocido `gateway (unhealthy)` (preexistente, ver Fase A.8).
 
 ---
 

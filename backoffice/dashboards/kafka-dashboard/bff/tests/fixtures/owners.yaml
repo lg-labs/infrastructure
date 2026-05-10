@@ -1,0 +1,8 @@
+# Test fixture — owners.yaml for contract tests
+owners:
+  - id: team-platform
+    name: Platform Team
+    contact: platform@lglabs.local
+  - id: team-data
+    name: Data Team
+    contact: data@lglabs.local
