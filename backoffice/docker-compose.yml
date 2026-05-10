@@ -6,6 +6,12 @@ name: ${COMPOSE_PROJECT_NAME:-lg-infra-backoffice}
 # Fase C: oauth2-proxy + nginx-gateway (SSO + autorización por rol) — IN PROGRESS
 # Fase D: Portainer (los upstreams AKHQ/Kibana se enlazan vía networks externas)
 # Fase E: pipeline audit a ELK
+#
+# Sub-stacks (incluidos via Compose `include:`, requiere v2.20+):
+#   - dashboards/kafka-dashboard: gestión de topics/schemas/ACL-metadata del cluster Kafka
+
+include:
+  - path: ./dashboards/kafka-dashboard/docker-compose.yml
 
 networks:
   lg-backoffice:

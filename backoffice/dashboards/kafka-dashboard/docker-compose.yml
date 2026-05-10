@@ -1,0 +1,88 @@
+# Kafka Dashboard sub-stack (Fase A: andamiaje)
+#
+# Sub-compose incluido desde backoffice/docker-compose.yml via `include:`.
+# NO se levanta por sí solo — siempre como parte del BackOffice.
+#
+# Servicios:
+#   - kafka-dashboard-fe:  nginx servirá la UI estática (Alpine.js) en /kafka/
+#   - kafka-dashboard-bff: FastAPI servirá la API en /kafka/api/
+#
+# Especificación: ../specs/design.md (§2, §10)
+
+name: ${COMPOSE_PROJECT_NAME:-lg-infra-backoffice}
+
+networks:
+  lg-backoffice:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME:-lg-infra-backoffice}_lg-backoffice
+  lg-infra-kafka_default:
+    external: true
+
+volumes:
+  backoffice-kafka-dashboard-data:
+    name: backoffice-kafka-dashboard-data
+
+services:
+  kafka-dashboard-fe:
+    image: nginx:1.27-alpine
+    container_name: lg-infra-backoffice-kafka-dashboard-fe
+    hostname: kafka-dashboard-fe
+    networks:
+      - lg-backoffice
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${KAFKA_DASHBOARD_FE_MEM_LIMIT:-64m}
+
+  kafka-dashboard-bff:
+    image: python:3.12-alpine
+    container_name: lg-infra-backoffice-kafka-dashboard-bff
+    hostname: kafka-dashboard-bff
+    # Fase A: placeholder. Fase B reemplazará por build local con FastAPI.
+    command:
+      - sh
+      - -c
+      - |
+        pip install --quiet --no-cache-dir 'fastapi[standard]==0.115.*' && \
+        cat > /tmp/main.py <<'EOF'
+        from fastapi import FastAPI, Header
+        app = FastAPI(title="kafka-dashboard-bff", version="0.0.1-placeholder")
+
+        @app.get("/api/health")
+        def health():
+            return {"status": "ok", "kafka": "unknown", "registry": "unknown", "sqlite": "unknown", "phase": "A-placeholder"}
+
+        @app.get("/api/whoami")
+        def whoami(
+            x_auth_request_user: str | None = Header(default=None),
+            x_auth_request_groups: str | None = Header(default=None),
+        ):
+            return {"user": x_auth_request_user, "groups": x_auth_request_groups}
+        EOF
+        cd /tmp && fastapi run main.py --host 0.0.0.0 --port 8000
+    networks:
+      - lg-backoffice
+      - lg-infra-kafka_default
+    volumes:
+      - backoffice-kafka-dashboard-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${KAFKA_DASHBOARD_BFF_MEM_LIMIT:-256m}
