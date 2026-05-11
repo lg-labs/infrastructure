@@ -7,10 +7,27 @@
 
 [![lg-labs][0]][1]
 [![License][2]][3]
+[![Docs][4]][5]
 
 With the utility **lg-labs** has created this project, to help community.
 
 For more information, check [Personal Blog][1].
+
+## 📚 Documentation
+
+Full documentation site (VitePress) available at:
+
+👉 **[https://lg-labs.github.io/infrastructure/][5]**
+
+Run the docs locally:
+
+```shell
+cd docs
+npm install
+npm run docs:dev    # http://localhost:5173/infrastructure/
+```
+
+Auto-deploy: any push to `master` touching `docs/**` triggers the [`Deploy VitePress site to Pages`](.github/workflows/deploy-docs.yml) workflow.
 
 # You can ...
 Using `makefile`
@@ -268,6 +285,8 @@ The MIT License (MIT). Please see [License][3] for more information.
 [1]: https://lufgarciaqu.medium.com
 [2]: https://img.shields.io/badge/license-MIT-green?style=flat-square
 [3]: LICENSE
+[4]: https://img.shields.io/badge/docs-online-brightgreen?style=flat-square
+[5]: https://lg-labs.github.io/infrastructure/
 
 
 [kibana]: http://localhost:5601
